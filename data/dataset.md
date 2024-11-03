@@ -1,4 +1,4 @@
-#Ссылка на датасет
+# Ссылка на датасет
 https://drive.google.com/file/d/1maGK8jQaGhFywz09UbzVCaQg1b_DmSEF/view?usp=sharing
 RangeIndex: 6798 entries, 0 to 6797
 Data columns (total 51 columns):
