@@ -1,5 +1,6 @@
 # Ссылка на датасет
 https://drive.google.com/file/d/1maGK8jQaGhFywz09UbzVCaQg1b_DmSEF/view?usp=sharing
+# Описание данных
 RangeIndex: 6798 entries, 0 to 6797
 Data columns (total 51 columns):
 |  #  |  Column      | Overview                         |  Non-Null Count | Dtype   |         
