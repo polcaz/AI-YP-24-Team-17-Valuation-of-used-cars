@@ -1,0 +1,43 @@
+ml-model-deployment/
+├── backend/                      # Директория с кодом FastAPI-сервиса
+│   ├── app/
+│   │   ├── __init__.py           # Инициализация пакета
+│   │   ├── main.py               # Главный файл запуска FastAPI
+│   │   ├── models.py             # Определение схем данных (Pydantic)
+│   │   ├── routers/
+│   │   │   ├── __init__.py       # Инициализация роутеров
+│   │   │   ├── api.py            # Основные API-эндпоинты
+│   │   ├── services.py           # Логика обработки данных и работы с ML-моделями
+│   │   ├── utils.py              # Утилиты (например, для логирования)
+│   ├── tests/                    # Тесты для FastAPI-сервиса
+│   │   ├── test_endpoints.py     # Тесты эндпоинтов
+│   │   ├── test_models.py        # Тесты работы с моделями
+│   ├── requirements.txt          # Зависимости Python для backend
+│   └── Dockerfile                # Dockerfile для FastAPI-сервиса
+│
+├── frontend/                     # Директория с кодом Streamlit-приложения
+│   ├── app.py                    # Главный файл запуска Streamlit
+│   ├── pages/                    # Поддержка многостраничного интерфейса
+│   │   ├── eda.py                # Страница для анализа данных
+│   │   ├── training.py           # Страница для обучения моделей
+│   │   ├── inference.py          # Страница для инференса
+│   ├── utils/                    # Утилиты для работы с API
+│   │   ├── api_client.py         # Клиент для взаимодействия с FastAPI
+│   ├── requirements.txt          # Зависимости Python для frontend
+│   └── Dockerfile                # Dockerfile для Streamlit-приложения
+│
+├── logstash/                     # Директория для настройки логирования
+│   ├── logstash.conf             # Конфигурация Logstash
+│   ├── Dockerfile                # Dockerfile для Logstash
+│
+├── logs/                         # Папка для хранения логов (игнорируется в Git)
+│   └── app.log                   # Лог-файл с событиями приложения
+│
+├── assets/                       # Медиафайлы для документации
+│   ├── frontend-demo.gif         # GIF-анимация работы Streamlit
+│   ├── backend-demo.gif          # GIF-анимация работы FastAPI
+│
+├── docker-compose.yml            # Docker-compose для запуска всех сервисов
+├── README.md                     # Документация проекта
+├── report.pdf                    # Отчет о проекте
+└── .gitignore                    # Список файлов/директорий, игнорируемых Git
