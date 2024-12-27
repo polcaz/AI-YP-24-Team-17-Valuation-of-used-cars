@@ -1,10 +1,12 @@
 # Реализует бизнес-логику (например, обучение моделей, предсказания)
 
 import pandas as pd
+import numpy as np
 from fastapi import HTTPException
 from sklearn.linear_model import LinearRegression, LogisticRegression
 import os
 from deployment.backend.app.preprocessing import preproc
+from deployment.backend.app.class_model import FullModel
 
 # In-memory storage for models and data
 models = {}
@@ -24,12 +26,12 @@ async def upload_csv_dataset(file):
         datasets["current"] = df
         os.remove(temp_file_path)
 
-        return {"message": "CSV dataset uploaded successfully", "columns": list(df.columns)}
+        return {"message": "CSV dataset uploaded successfully", "df.isnull": df.isnull().sum().to_dict()}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to process CSV file: {str(e)}")
 
 
-async def perform_eda():
+def perform_eda():
     if "current" not in datasets:
         raise HTTPException(status_code=404, detail="No dataset uploaded")
     df = datasets["current"]
@@ -45,24 +47,64 @@ def preprocessing_data():
     df = datasets["current"]
     train, test = preproc(df)
     datasets_prep["current"] = [train, test]
-    return {"message": "Preprocessing of the dataset was successful.", "train": train.describe().to_dict()}
+    return {"message": "Preprocessing of the dataset was successful.", "train.isnull": train.isnull().sum().to_dict()}
 
 def train_model(config):
     if config.id in models:
         raise HTTPException(status_code=400, detail=f"Model '{config.id}' already exists")
-    if config.ml_model_type == "linear":
-        model = LinearRegression(**config.hyperparameters)
-    elif config.ml_model_type == "logistic":
-        model = LogisticRegression(**config.hyperparameters)
+    if config.ml_model_type == "full":
+        model = FullModel(config.hyperparameters)
+        # Подготовка данных
+        X_train, y_train, X_test, y_test = model.prepare_data(datasets_prep["current"][0], datasets_prep["current"][1])
+        # Построение пайплайна
+        model.build_pipeline(X_train)
+        # Обучение модели
+        model.train_model(X_train, y_train)
+        # Оценка модели
+        r2 = model.evaluate_model(X_test, y_test)
+        # Предсказание
+        predictions = model.predict(X_test)
+        models[config.id] = model
+        experiments[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
+    elif config.ml_model_type == "poly":
+        model = FullModel(config.hyperparameters)
+        # Подготовка данных
+        X_train, y_train, X_test, y_test = model.prepare_data(datasets_prep["current"][0], datasets_prep["current"][1])
+        # Убираем логарифмирование целевой переменной
+        y_train = np.exp(y_train)
+        y_test = np.exp(y_test)
+        # Построение пайплайна
+        model.build_pipeline(X_train)
+        # Обучение модели
+        model.train_model(X_train, y_train)
+        # Оценка модели
+        r2 = model.evaluate_model(X_test, y_test)
+        # Предсказание
+        predictions = model.predict(X_test)
+        models[config.id] = model
+        experiments[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
+    elif config.ml_model_type == "ohe":
+        model = FullModel(config.hyperparameters)
+        # Подготовка данных
+        X_train, y_train, X_test, y_test = model.prepare_data(datasets_prep["current"][0], datasets_prep["current"][1])
+        # Убираем логарифмирование целевой переменной
+        y_train = np.exp(y_train)
+        y_test = np.exp(y_test)
+        # Построение пайплайна без полиномиальных признаков
+        model.build_pipeline_cat(X_train)
+        # Обучение модели
+        model.train_model(X_train, y_train)
+        # Оценка модели
+        r2 = model.evaluate_model(X_test, y_test)
+        # Предсказание
+        predictions = model.predict(X_test)
+        models[config.id] = model
+        experiments[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
     else:
         raise HTTPException(status_code=400, detail="Unsupported model type")
-    # Dummy data for demonstration
-    X = [[i] for i in range(10)]
-    y = [i * 2 for i in range(10)]
-    model.fit(X, y)
-    models[config.id] = model
-    experiments[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
-    return {"message": f"Model '{config.id}' trained successfully"}
+
+
+    return {"message": f"Model '{config.id}' trained successfully, r2: {round(r2, 4)}"}
 
 def compare_experiments(selected_experiments):
     result = []

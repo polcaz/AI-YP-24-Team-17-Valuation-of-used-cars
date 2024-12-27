@@ -9,7 +9,7 @@ class DatasetUploadRequest(BaseModel):
 class ModelConfig(BaseModel):
     id: str
     ml_model_type: str
-    hyperparameters: Dict[str, Any]
+    hyperparameters: float
 
 class FitRequest(BaseModel):
     config: ModelConfig
