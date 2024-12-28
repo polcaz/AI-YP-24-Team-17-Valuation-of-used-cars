@@ -275,7 +275,6 @@ def preproc(df):
     class_auto_transformer = Pipeline(steps=[
         ("transform_class_auto_mmge", medModTransformer([df_mmge, df_mmg, df_mme, df_mm], 'class_auto')),
         ("transform_class_auto_to_M", filterTransformer(['Фургон'], 'car_type', 'class_auto', 'M')),
-        # ("transform_class_auto_long", classLongTransformer('car_type', 'long')),
         ("transform_class_auto_tce", medModTransformer([df_tce, df_tc, df_te, df_t, df_ce, df_c], 'class_auto')),
         ("transform_class_auto_to_F", filterTransformer(['Лимузин'], 'car_type', 'class_auto', 'F'))
     ])

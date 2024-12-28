@@ -17,6 +17,9 @@ class FitRequest(BaseModel):
 class FitResponse(BaseModel):
     message: str
 
+class ModelListResponse(BaseModel):
+    models: List[str]
+
 class PredictionRequest(BaseModel):
     id: str
     X: List[List[float]]

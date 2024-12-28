@@ -119,3 +119,6 @@ def make_prediction(model_id, X):
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
     predictions = models[model_id].predict(X)
     return {"predictions": predictions.tolist()}
+
+def list_models():
+    return {"models": list(models.keys())}

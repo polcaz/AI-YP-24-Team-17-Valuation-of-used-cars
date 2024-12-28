@@ -8,12 +8,14 @@ from deployment.backend.app.services import (
     train_model,
     compare_experiments,
     make_prediction,
+    list_models,
 )
 from deployment.backend.app.models import (
     DatasetUploadRequest,
     FitRequest,
     PredictionRequest,
     ExperimentComparisonRequest,
+    ModelListResponse
 )
 router = APIRouter()
 
@@ -34,6 +36,10 @@ def preprocessing_dataset_endpoint():
 @router.post("/models/fit")
 def train_model_endpoint(request: FitRequest):
     return train_model(request.config)
+
+@router.get("/models/list_models", response_model=ModelListResponse)
+def list_models_endpoint():
+    return list_models()
 
 @router.post("/experiments/compare")
 def compare_experiments_endpoint(request: ExperimentComparisonRequest):

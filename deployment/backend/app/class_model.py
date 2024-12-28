@@ -72,7 +72,7 @@ class FullModel:
         :param X_train: Обучающий датасет (признаки).
         """
         categorical_transformer = Pipeline(steps=[
-            ('onehot', OneHotEncoder(drop='first', min_frequency=4, max_categories=140, handle_unknown='ignore'))
+            ('onehot', OneHotEncoder(drop='first', handle_unknown='ignore'))
         ])
 
         numerical_transformer = Pipeline(steps=[
