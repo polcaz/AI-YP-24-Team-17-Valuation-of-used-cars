@@ -6,16 +6,24 @@ from deployment.backend.app.services import (
     perform_eda,
     preprocessing_data,
     train_model,
+    load_model_endpoint,
+    unload_model_endpoint,
     compare_experiments,
     make_prediction,
     list_models,
+    remove_model,
+    remove_all_models, unload_model_endpoint,
 )
 from deployment.backend.app.models import (
     DatasetUploadRequest,
     FitRequest,
+    LoadRequest,
+    LoadResponse,
+    UnloadResponse,
     PredictionRequest,
     ExperimentComparisonRequest,
-    ModelListResponse
+    ModelListResponse,
+    RemoveResponse,
 )
 router = APIRouter()
 
@@ -25,11 +33,11 @@ async def upload_csv_dataset_endpoint(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
     return await upload_csv_dataset(file)
 
-@router.get("/eda")
+@router.get("/dataset/eda")
 def perform_eda_endpoint():
     return perform_eda()
 
-@router.post("/preprocessing")
+@router.post("/dataset/preprocessing")
 def preprocessing_dataset_endpoint():
     return preprocessing_data()
 
@@ -41,10 +49,26 @@ def train_model_endpoint(request: FitRequest):
 def list_models_endpoint():
     return list_models()
 
-@router.post("/experiments/compare")
+@router.post("/models/load", response_model=LoadResponse)
+def load_model(request: LoadRequest):
+    return load_model_endpoint(request)
+
+@router.post("/models/unload", response_model=UnloadResponse)
+def unload_model():
+    return unload_model_endpoint()
+
+@router.post("/models/experiments/compare")
 def compare_experiments_endpoint(request: ExperimentComparisonRequest):
     return compare_experiments(request.experiments)
 
 @router.post("/models/predict")
 def make_prediction_endpoint(request: PredictionRequest):
     return make_prediction(request.id, request.X)
+
+@router.delete("/models/remove/{model_id}", response_model=RemoveResponse)
+def remove_model_endpoint(model_id: str):
+    return remove_model(model_id)
+
+@router.delete("/models/remove_all", response_model=RemoveResponse)
+def remove_all_models_endpoint():
+    return remove_all_models()

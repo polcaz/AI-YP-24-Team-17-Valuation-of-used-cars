@@ -17,8 +17,14 @@ class FitRequest(BaseModel):
 class FitResponse(BaseModel):
     message: str
 
-class ModelListResponse(BaseModel):
-    models: List[str]
+class LoadRequest(BaseModel):
+    id: str
+
+class LoadResponse(BaseModel):
+    message: str = Field(..., example="Model 'model_name' loaded")
+
+class UnloadResponse(BaseModel):
+    message: str = Field(..., example="Model 'model_name' unloaded")
 
 class PredictionRequest(BaseModel):
     id: str
@@ -29,3 +35,9 @@ class PredictionResponse(BaseModel):
 
 class ExperimentComparisonRequest(BaseModel):
     experiments: List[str]
+
+class ModelListResponse(BaseModel):
+    models: List[str]
+
+class RemoveResponse(BaseModel):
+    message: str = Field(..., example="Model 'model_name' removed")

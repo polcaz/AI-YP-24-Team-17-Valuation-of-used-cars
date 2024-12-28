@@ -13,6 +13,7 @@ models = {}
 datasets = {}
 datasets_prep = {}
 experiments = {}
+loaded_model = None
 
 async def upload_csv_dataset(file):
     try:
@@ -106,6 +107,24 @@ def train_model(config):
 
     return {"message": f"Model '{config.id}' trained successfully, r2: {round(r2, 4)}"}
 
+def load_model_endpoint(request):
+    global loaded_model
+    model_id = request.id
+
+    if model_id not in models:
+        raise HTTPException(status_code=404, detail="Model not found.")
+
+    loaded_model = models[model_id]
+    return {"message": f"Model '{model_id}' loaded"}
+
+def unload_model_endpoint():
+    global loaded_model
+    if not loaded_model:
+        raise HTTPException(status_code=400, detail="No model loaded.")
+
+    loaded_model = None
+    return {"message": "Model unloaded"}
+
 def compare_experiments(selected_experiments):
     result = []
     for exp in selected_experiments:
@@ -122,3 +141,14 @@ def make_prediction(model_id, X):
 
 def list_models():
     return {"models": list(models.keys())}
+
+def remove_model(model_id: str):
+    if model_id not in models:
+        raise HTTPException(status_code=404, detail="Model not found.")
+
+    del models[model_id]
+    return {"message": f"Model '{model_id}' removed"}
+
+def remove_all_models():
+    models.clear()
+    return {"message": "All models removed"}
