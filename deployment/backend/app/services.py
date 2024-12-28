@@ -15,7 +15,7 @@ from deployment.backend.app.preprocessing_x import preproc_x
 models = {}
 datasets = {}
 datasets_prep = {}
-experiments = {}
+learning_curves = {}
 loaded_model = None
 
 async def upload_csv_dataset(file):
@@ -67,7 +67,7 @@ def train_model(config):
         # Предсказание
         predictions = model.predict(X_test)
         models[config.id] = model
-        experiments[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
+        learning_curves[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
     elif config.ml_model_type == "poly":
         model = FullModel(config.hyperparameters)
         # Подготовка данных
@@ -84,7 +84,7 @@ def train_model(config):
         # Предсказание
         predictions = model.predict(X_test)
         models[config.id] = model
-        experiments[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
+        learning_curves[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
     elif config.ml_model_type == "ohe":
         model = FullModel(config.hyperparameters)
         # Подготовка данных
@@ -101,11 +101,9 @@ def train_model(config):
         # Предсказание
         predictions = model.predict(X_test)
         models[config.id] = model
-        experiments[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
+        learning_curves[config.id] = model.learning_curve(X_train, y_train, X_test, y_test)
     else:
         raise HTTPException(status_code=400, detail="Unsupported model type")
-
-
     return {"message": f"Model '{config.id}' trained successfully, r2: {round(r2, 4)}"}
 
 def load_model_endpoint(request):
@@ -126,13 +124,10 @@ def unload_model_endpoint():
     loaded_model = None
     return {"message": "Model unloaded"}
 
-def compare_experiments(selected_experiments):
-    result = []
-    for exp in selected_experiments:
-        if exp not in experiments:
-            raise HTTPException(status_code=404, detail=f"Experiment '{exp}' not found")
-        result.append({"name": exp, **experiments[exp]})
-    return result
+def list_learning_curve(model_id):
+    if model_id not in models:
+        raise HTTPException(status_code=404, detail="Model not found.")
+    return {f"learning curve {model_id}": learning_curves[model_id]}
 
 def make_prediction(model_id, data):
     if model_id not in models:

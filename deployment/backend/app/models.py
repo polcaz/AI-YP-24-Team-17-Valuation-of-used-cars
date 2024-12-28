@@ -33,8 +33,13 @@ class PredictionRequest(BaseModel):
 class PredictionResponse(BaseModel):
     predictions: List[float]
 
-class ExperimentComparisonRequest(BaseModel):
-    experiments: List[str]
+class LearningCurveRequest(BaseModel):
+    id: str
+
+class LearningCurveResponse(BaseModel):
+    data_sizes: List[float]
+    train_errors: List[float]
+    test_errors: List[float]
 
 class ModelListResponse(BaseModel):
     models: List[str]

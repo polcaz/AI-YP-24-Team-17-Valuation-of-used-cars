@@ -139,16 +139,16 @@ class FullModel:
         """
         train_errors = []
         test_errors = []
-        data_sizes = np.linspace(0.1, 1.0, steps)
+        data_sizes = np.linspace(0, 1, steps + 1)[1:-1]
 
         for size in data_sizes:
-            X_partial, _, y_partial, _ = train_test_split(X_train, y_train, train_size=size, random_state=42)
+            X_partial, _, y_partial, _ = train_test_split(X_train, y_train, train_size=float(size), random_state=42)
             self.train_model(X_partial, y_partial)
 
             train_predictions = self.predict(X_partial)
             test_predictions = self.predict(X_test)
 
-            train_errors.append(mean_squared_error(y_partial, train_predictions, squared=False))
-            test_errors.append(mean_squared_error(y_test, test_predictions, squared=False))
+            train_errors.append(mean_squared_error(y_partial, train_predictions))
+            test_errors.append(mean_squared_error(y_test, test_predictions))
 
-        return data_sizes, train_errors, test_errors
+        return [data_sizes.tolist(), train_errors, test_errors]

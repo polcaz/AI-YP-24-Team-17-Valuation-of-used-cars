@@ -8,7 +8,7 @@ from deployment.backend.app.services import (
     train_model,
     load_model_endpoint,
     unload_model_endpoint,
-    compare_experiments,
+    list_learning_curve,
     make_prediction,
     predict_items,
     list_models,
@@ -22,9 +22,9 @@ from deployment.backend.app.models import (
     LoadResponse,
     UnloadResponse,
     PredictionRequest,
-    ExperimentComparisonRequest,
+    LearningCurveRequest,
     ModelListResponse,
-    RemoveResponse,
+    RemoveResponse, LearningCurveRequest,
 )
 router = APIRouter()
 
@@ -62,9 +62,9 @@ def unload_model():
 async def make_prediction_items_endpoint(file: UploadFile):
     return await predict_items(file)
 
-@router.post("/models/experiments/compare")
-def compare_experiments_endpoint(request: ExperimentComparisonRequest):
-    return compare_experiments(request.experiments)
+@router.post("/models/learning_curve")
+def learning_curves_endpoint(request: LearningCurveRequest):
+    return list_learning_curve(request.id)
 
 @router.post("/models/predict")
 def make_prediction_endpoint(request: PredictionRequest):
