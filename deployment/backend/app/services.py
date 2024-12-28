@@ -3,10 +3,13 @@
 import pandas as pd
 import numpy as np
 from fastapi import HTTPException
+from fastapi.responses import FileResponse
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression, LogisticRegression
 import os
 from deployment.backend.app.preprocessing import preproc
 from deployment.backend.app.class_model import FullModel
+from deployment.backend.app.preprocessing_x import preproc_x
 
 # In-memory storage for models and data
 models = {}
@@ -38,8 +41,6 @@ def perform_eda():
     df = datasets["current"]
     return {
         "statistics": df.describe().to_dict(),
-        # "info": df.info().to_dict(),
-        # "correlation": df.corr().to_dict(),
     }
 
 def preprocessing_data():
@@ -133,11 +134,41 @@ def compare_experiments(selected_experiments):
         result.append({"name": exp, **experiments[exp]})
     return result
 
-def make_prediction(model_id, X):
+def make_prediction(model_id, data):
     if model_id not in models:
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
-    predictions = models[model_id].predict(X)
-    return {"predictions": predictions.tolist()}
+    model = models[model_id]
+
+    try:
+        input_data = pd.DataFrame([data])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid input data: {e}")
+    try:
+        predictions = model.predict(preproc_x(input_data))
+        return {"predictions": predictions.tolist()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
+
+async def predict_items(file):
+    global loaded_model
+    if not loaded_model:
+        raise HTTPException(status_code=400, detail="No model loaded.")
+    # Save uploaded file temporarily
+    temp_file_path = f"/tmp/{file.filename}"
+    with open(temp_file_path, "wb") as temp_file:
+        temp_file.write(await file.read())
+    # Load the CSV into a DataFrame
+    X = pd.read_csv(temp_file_path)
+    os.remove(temp_file_path)
+
+    output = X
+
+    X['predict'] = pd.Series(loaded_model.predict(preproc_x(X)))
+    output['predict'] = X['predict']
+    output.to_csv('predictions.csv', index=False)
+    response = FileResponse(path='predictions.csv',
+                            media_type='text/csv', filename='predictions.csv')
+    return response
 
 def list_models():
     return {"models": list(models.keys())}

@@ -28,7 +28,7 @@ class UnloadResponse(BaseModel):
 
 class PredictionRequest(BaseModel):
     id: str
-    X: List[List[float]]
+    data: dict
 
 class PredictionResponse(BaseModel):
     predictions: List[float]
