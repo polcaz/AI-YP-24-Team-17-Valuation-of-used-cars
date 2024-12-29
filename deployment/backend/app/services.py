@@ -67,7 +67,7 @@ def train_model(config):
         # Предсказание
         predictions = model.predict(X_test)
         models[config.id] = model
-        learning_curves[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
+        learning_curves[config.id] = model.learning_curve(X_train, y_train, X_test, y_test)
     elif config.ml_model_type == "poly":
         model = FullModel(config.hyperparameters)
         # Подготовка данных
@@ -84,7 +84,7 @@ def train_model(config):
         # Предсказание
         predictions = model.predict(X_test)
         models[config.id] = model
-        learning_curves[config.id] = {"epochs": list(range(10)), "accuracy": [0.8] * 10, "loss": [0.2] * 10}
+        learning_curves[config.id] = model.learning_curve(X_train, y_train, X_test, y_test)
     elif config.ml_model_type == "ohe":
         model = FullModel(config.hyperparameters)
         # Подготовка данных
