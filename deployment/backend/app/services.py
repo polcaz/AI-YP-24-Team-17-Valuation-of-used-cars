@@ -49,7 +49,7 @@ def preprocessing_data():
     df = datasets["current"]
     train, test = preproc(df)
     datasets_prep["current"] = [train, test]
-    return {"message": "Preprocessing of the dataset was successful.", "train.isnull": train.isnull().sum().to_dict()}
+    return {"message": "Preprocessing of the dataset was successful.", "train": train.to_dict()}
 
 def train_model(config):
     if config.id in models:
@@ -104,7 +104,7 @@ def train_model(config):
         learning_curves[config.id] = model.learning_curve(X_train, y_train, X_test, y_test)
     else:
         raise HTTPException(status_code=400, detail="Unsupported model type")
-    return {"message": f"Model '{config.id}' trained successfully, r2: {round(r2, 4)}"}
+    return {"message": "Model trained successfully", "model": f" '{config.id}', r2: {round(r2, 4)}"}
 
 def load_model_endpoint(request):
     global loaded_model
