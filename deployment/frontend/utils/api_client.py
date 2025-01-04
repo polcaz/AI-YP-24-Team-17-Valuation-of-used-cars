@@ -56,10 +56,28 @@ def learning_curve(endpoint, model_id):
         st.error(f"Ошибка при загрузке списка обученных моделей: {e}")
         return f"Ошибка при загрузке списка обученных моделей: {e}"
 
-def make_prediction(model_id, input_data):
-    url = f"{API_BASE_URL}/predict/{model_id}"
-    response = requests.post(url, json={"data": input_data})
-    return response.json()
+
+def make_prediction(endpoint, model_id, input_data):
+    """
+    Отправка данных на сервер для инференса.
+
+    :param endpoint: API-эндпоинт для предсказания.
+    :param model_id: ID выбранной модели.
+    :param input_data: Данные для инференса в формате JSON.
+    :return: Ответ сервера.
+    """
+    url = f"{API_BASE_URL}/{endpoint}"
+    payload = {
+        "id": model_id,
+        "data": input_data
+    }
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()  # Проверка на наличие HTTP-ошибок
+        return response
+    except requests.exceptions.RequestException as e:
+        st.error(f"Ошибка при выполнении предсказания: {e}")
+        return None
 
 def upload_dataset(data):
     url = f"{API_BASE_URL}/api/v1/dataset/upload"

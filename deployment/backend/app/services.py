@@ -127,7 +127,8 @@ def unload_model_endpoint():
 def list_learning_curve(model_id):
     if model_id not in models:
         raise HTTPException(status_code=404, detail="Model not found.")
-    return {f"learning curve {model_id}": learning_curves[model_id]}
+    # return {f"learning curve": learning_curves[model_id]}
+    return learning_curves[model_id]
 
 def make_prediction(model_id, data):
     if model_id not in models:

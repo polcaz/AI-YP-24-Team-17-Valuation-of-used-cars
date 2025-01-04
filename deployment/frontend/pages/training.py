@@ -7,6 +7,12 @@ def show_page():
     st.header("Обучение модели")
     st.write("Настройте параметры модели и запустите процесс обучения")
 
+    # Инициализация состояния
+    if "list_model" not in st.session_state:
+        st.session_state.list_model = []
+    if "model_id" not in st.session_state:
+        st.session_state.model_id = None
+
     # Задаем параметр Альфа
     alpha = st.slider("Коэффициент регуляризации (alpha)", 0.01, 50.0, 1.0)
 
@@ -35,27 +41,40 @@ def show_page():
             else:
                 st.error(f"Ошибка: {response.json()['detail']}")
 
-    # Список  готовых моделей
-    st.subheader("Список доступных моделей")
+    # Кнопка для обновления списка моделей
     if st.button("Обновить список"):
-        response = list_models("api/v1/models/list_models")
-        if response.status_code == 200:
-            list_model = response.json().get("models", [])
-            st.success(response.json().get("models", []))
-            st.write(f"{type(list_model)}")
-            st.subheader("Кривая обучения")
-            model_to_visualize = st.selectbox("Выберите модель для построения графика:", list_model)
-
-            if st.button("Показать кривую обучения"):
-                response = learning_curve("api/v1/models/learning_curve", model_to_visualize)
-                if response.status_code == 200:
-                    learning_curve_data = response.json()
-                    st.write(f"Кривая обучения для модели '{model_to_visualize}':")
-                    st.line_chart({
-                        "Ошибка на трейне": learning_curve_data[1],
-                        "Ошибка на тесте": learning_curve_data[2]
-                    })
+        try:
+            response = list_models("api/v1/models/list_models")
+            if response and response.status_code == 200:
+                st.session_state.list_model = response.json().get("models", [])
+                if st.session_state.list_model:
+                    st.success("Список моделей обновлен!")
                 else:
-                    st.error(f"Ошибка: {response.json()['detail']}")
+                    st.warning("Модели не найдены.")
+            else:
+                st.error(f"Ошибка: сервер вернул код {response.status_code}")
+        except Exception as e:
+            st.error(f"Ошибка вызова API: {e}")
+
+    # Выбор модели
+    if st.session_state.list_model:
+        st.session_state.model_id = st.selectbox(
+            "Выберите модель для построения кривой обучения:",
+            st.session_state.list_model,
+            index=st.session_state.list_model.index(st.session_state.model_id)
+            if st.session_state.model_id in st.session_state.list_model
+            else 0
+        )
+
+    # Кривая обучения
+    if st.button("Показать кривую обучения"):
+        response = learning_curve("api/v1/models/learning_curve", st.session_state.model_id)
+        if response.status_code == 200:
+            learning_curve_data = response.json()
+            st.write(f"Кривая обучения для модели '{st.session_state.model_id}':")
+            st.line_chart({
+                "r2_score на трейне": learning_curve_data["train_errors"],
+                "r2_score на тесте": learning_curve_data["test_errors"]
+            })
         else:
-            st.error(f"Ошибка {response.status_code}: {response.text}")
+            st.error(f"Ошибка: {response.json()['detail']}")

@@ -148,7 +148,9 @@ class FullModel:
             train_predictions = self.predict(X_partial)
             test_predictions = self.predict(X_test)
 
-            train_errors.append(mean_squared_error(y_partial, train_predictions))
-            test_errors.append(mean_squared_error(y_test, test_predictions))
+            train_errors.append(r2_score(y_partial, train_predictions))
+            test_errors.append(r2_score(y_test, test_predictions))
 
-        return [data_sizes.tolist(), train_errors, test_errors]
+        return {"data_size": data_sizes.tolist(),
+                "train_errors": train_errors,
+                "test_errors": test_errors}
