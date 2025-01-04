@@ -118,3 +118,63 @@ def show_page():
     if train is not None:
         st.write("Просмотр обработанных данных:")
         st.dataframe(train)
+
+        # Составим список числовых признаков
+        num_features = (
+            train.select_dtypes(
+                include=['int', 'float']
+            ).columns.to_list()
+        )
+
+        message, select = st.columns(2, vertical_alignment="bottom")
+        message.markdown('Выберите признак, распределение значений которого хотите изучить')
+
+        feature_to_analize = select.selectbox('Признак', num_features)
+
+        fig = go.Figure()
+        fig.add_trace(go.Histogram(
+                x=train[feature_to_analize],
+                histnorm='percent',
+                name=f'{feature_to_analize}',
+                marker_color='#EB89B5'
+            ))
+
+        fig.update_layout(
+            xaxis_title_text=f'Значения {feature_to_analize}',
+            yaxis_title_text='Количество объектов',
+            title_text=f'Распределение значений {feature_to_analize}',
+            hovermode="x"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Определим значения признака, для которых будем считать среднее
+        train['intervals'], thresholds = \
+            pd.qcut(train[feature_to_analize], q=40, duplicates='drop', retbins=True)
+        data = train.groupby(by=['intervals'],
+                          observed=True)['car_price'].agg(['mean'])
+        labels = (thresholds[1:] + thresholds[:-1]) / 2
+
+        fig = go.Figure([
+            go.Scatter(
+                name='объекты',
+                x=train[feature_to_analize],
+                y=train['car_price'],
+                mode='markers',
+                line=dict(color='rgb(31, 119, 180)'),
+            ),
+            go.Scatter(
+                name='среднее значение',
+                x=labels,
+                y=data['mean'],
+                mode='markers',
+                line=dict(color='red'),
+            )
+        ])
+        fig.update_layout(
+            yaxis=dict(title=dict(text='Целевой признак (цена)')),
+            title=dict(text=f'Значения {feature_to_analize}'),
+            title_text=f'Связь {feature_to_analize} с целевым признаком (цена)',
+            hovermode="x"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
