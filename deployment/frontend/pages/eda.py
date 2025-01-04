@@ -117,6 +117,7 @@ def show_page():
 
     if st.session_state.train is not None:
         st.write("Просмотр обработанных данных:")
+
         st.dataframe(st.session_state.train)
 
         # Составим список числовых признаков
@@ -133,6 +134,7 @@ def show_page():
 
         fig = go.Figure()
         fig.add_trace(go.Histogram(
+
                 x=st.session_state.train[feature_to_analize],
                 histnorm='percent',
                 name=f'{feature_to_analize}',
@@ -148,6 +150,7 @@ def show_page():
         st.plotly_chart(fig, use_container_width=True)
 
         # Определим значения признака, для которых будем считать среднее
+
         st.session_state.train['intervals'], thresholds = \
             pd.qcut(st.session_state.train[feature_to_analize], q=40, duplicates='drop', retbins=True)
         data = st.session_state.train.groupby(by=['intervals'],
@@ -157,6 +160,7 @@ def show_page():
         fig = go.Figure([
             go.Scatter(
                 name='объекты',
+
                 x=st.session_state.train[feature_to_analize],
                 y=st.session_state.train['car_price'],
                 mode='markers',
@@ -176,4 +180,5 @@ def show_page():
             title_text=f'Связь {feature_to_analize} с целевым признаком (цена)',
             hovermode="x"
         )
+
         st.plotly_chart(fig, use_container_width=True)
