@@ -5,7 +5,7 @@ from pages import eda, training, inference
 st.set_page_config(page_title="Car Valuation App", layout="wide")
 
 # Заголовок
-st.title("Car Valuation App")
+st.title("Предсказание стоимости подержанного автомобиля")
 
 # Меню
 menu = st.sidebar.radio("Навигация", ["Анализ данных", "Обучение модели", "Инференс"])

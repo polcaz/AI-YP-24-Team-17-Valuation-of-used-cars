@@ -8,7 +8,7 @@ from deployment.frontend.utils.api_client import *
 def show_page():
     st.header("Анализ данных")
     uploaded_file = st.file_uploader("Загрузите датасет", type=["csv"])
-    train = None
+    st.session_state.train = None
 
     if uploaded_file is not None:
 
@@ -111,17 +111,18 @@ def show_page():
             if response.status_code == 200:
                 result = response.json()
                 st.success(result['message'])
-                train = pd.DataFrame(result['train'])
+                st.session_state.train = pd.DataFrame(result['train'])
             else:
                 st.error('Ошибка обработки файла на сервере.')
 
-    if train is not None:
+    if st.session_state.train is not None:
         st.write("Просмотр обработанных данных:")
-        st.dataframe(train)
+
+        st.dataframe(st.session_state.train)
 
         # Составим список числовых признаков
         num_features = (
-            train.select_dtypes(
+            st.session_state.train.select_dtypes(
                 include=['int', 'float']
             ).columns.to_list()
         )
@@ -133,7 +134,8 @@ def show_page():
 
         fig = go.Figure()
         fig.add_trace(go.Histogram(
-                x=train[feature_to_analize],
+
+                x=st.session_state.train[feature_to_analize],
                 histnorm='percent',
                 name=f'{feature_to_analize}',
                 marker_color='#EB89B5'
@@ -148,17 +150,19 @@ def show_page():
         st.plotly_chart(fig, use_container_width=True)
 
         # Определим значения признака, для которых будем считать среднее
-        train['intervals'], thresholds = \
-            pd.qcut(train[feature_to_analize], q=40, duplicates='drop', retbins=True)
-        data = train.groupby(by=['intervals'],
+
+        st.session_state.train['intervals'], thresholds = \
+            pd.qcut(st.session_state.train[feature_to_analize], q=40, duplicates='drop', retbins=True)
+        data = st.session_state.train.groupby(by=['intervals'],
                           observed=True)['car_price'].agg(['mean'])
         labels = (thresholds[1:] + thresholds[:-1]) / 2
 
         fig = go.Figure([
             go.Scatter(
                 name='объекты',
-                x=train[feature_to_analize],
-                y=train['car_price'],
+
+                x=st.session_state.train[feature_to_analize],
+                y=st.session_state.train['car_price'],
                 mode='markers',
                 line=dict(color='rgb(31, 119, 180)'),
             ),
@@ -176,5 +180,5 @@ def show_page():
             title_text=f'Связь {feature_to_analize} с целевым признаком (цена)',
             hovermode="x"
         )
-        st.plotly_chart(fig, use_container_width=True)
 
+        st.plotly_chart(fig, use_container_width=True)
