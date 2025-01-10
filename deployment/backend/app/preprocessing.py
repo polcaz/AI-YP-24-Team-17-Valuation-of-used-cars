@@ -10,19 +10,22 @@ def preproc(df):
 
     # Класс для удаления столбцов из датасета
     class columnDropperTransformer():
-        def __init__(self,columns):
-            self.columns=columns
-        def transform(self,X,y=None):
-            X = X.drop(self.columns,axis=1)
+        def __init__(self, columns):
+            self.columns = columns
+
+        def transform(self, X, y=None):
+            X = X.drop(self.columns, axis=1)
             return X
+
         def fit(self, X, y=None):
             return self
 
     # Класс для обработки типа автомобиля
     class columnCarTypeTransformer():
-        def __init__(self,columns):
-            self.columns=columns
-        def transform(self,X,y=None):
+        def __init__(self, columns):
+            self.columns = columns
+
+        def transform(self, X, y=None):
             def mod_car_type(x):
                 car_type_short = [
                     'Внедорожник 3 дв.',
@@ -52,364 +55,353 @@ def preproc(df):
                     if car_type in x:
                         x = car_type
                 return x
+
             X['car_type'] = X['car_type'].apply(lambda x: mod_car_type(x) if not pd.isnull(x) else np.nan)
             return X
+
         def fit(self, X, y=None):
             return self
 
-    # Готовим данные для обработки
-    drop_columns = ['Unnamed: 0', 'url_car', 'ann_id', 'ann_date', 'ann_city',
-                        'avail', 'original_pts', 'customs', 'link_cpl', 'eng_power_kw',
-                        'pow_resrv', 'options', 'condition', 'url_compl', 'gross_weight']
+    # Создание класса-трансформера для заполнения пропусков медианой по группам
+    import pandas as pd
+    import numpy as np
+    from sklearn.base import BaseEstimator, TransformerMixin
+    from sklearn.pipeline import Pipeline
 
-    column_dropper= Pipeline([
-        ("column_dropper", columnDropperTransformer(drop_columns))
-    ])
+    # Класс-трансформер для заполнения пропусков медианой по группам
+    class GroupMedianImputer(BaseEstimator, TransformerMixin):
+        def __init__(self, group_cols, target_col):
+            """
+            Инициализация трансформера.
 
-    car_type_transformer = Pipeline([
-        ("car_type_transformer", columnCarTypeTransformer('car_type'))
-    ])
+            :param group_cols: Список колонок для группировки.
+            :param target_col: Колонка с пропусками для заполнения.
+            """
+            self.group_cols = group_cols
+            self.target_col = target_col
+            self.group_medians_ = None
 
-    df_train = column_dropper.fit_transform(df_train)
-    car_type_transformer.fit_transform(df_train)
-    df_test = column_dropper.fit_transform(df_test)
-    car_type_transformer.fit_transform(df_test)
+        def fit(self, X, y=None):
+            # Рассчитываем медианы по комбинации значений в group_cols
+            self.group_medians_ = (
+                X.groupby(self.group_cols)[self.target_col]
+                .median()
+                .reset_index()
+                .rename(columns={self.target_col: "median_value"})
+            )
+            return self
 
+        def transform(self, X):
+            X = X.copy()
+            # Объединяем с рассчитанными медианами по ключевым столбцам
+            X = X.merge(self.group_medians_, on=self.group_cols, how="left")
+            # Заполняем пропуски в целевой колонке
+            X[self.target_col] = X[self.target_col].fillna(X["median_value"])
+            # Удаляем временную колонку с медианой
+            X.drop(columns=["median_value"], inplace=True)
+            return X
 
-    # Класс для замены полей автомобиля определенным значением по фильтру
-    class filterTransformer():
+    # Создание класса-трансформера для заполнения пропусков модой по группам
+    import pandas as pd
+    import numpy as np
+    from sklearn.base import BaseEstimator, TransformerMixin
+    from sklearn.pipeline import Pipeline
 
-        def __init__(self, filters, column_fix, column_replace, value_replace):
-            self.filters = filters
-            self.column_fix = column_fix
-            self.column_replace = column_replace
-            self.value_replace = value_replace
+    # Класс-трансформер для заполнения пропусков модой по группам
+    class GroupModeImputer(BaseEstimator, TransformerMixin):
+        def __init__(self, group_cols, target_col):
+            """
+            Инициализация трансформера.
+
+            :param group_cols: Список колонок для группировки.
+            :param target_col: Колонка с пропусками для заполнения.
+            """
+            self.group_cols = group_cols
+            self.target_col = target_col
+            self.group_modes_ = None
+
+        def fit(self, X, y=None):
+            # Рассчитываем моды по комбинации значений в group_cols
+            def safe_mode(series):
+                if series.empty:
+                    return np.nan
+                mode = series.mode()
+                return mode.iloc[0] if not mode.empty else np.nan
+
+            self.group_modes_ = (
+                X.groupby(self.group_cols)[self.target_col]
+                .agg(safe_mode)
+                .reset_index()
+                .rename(columns={self.target_col: "mode_value"})
+            )
+            return self
+
+        def transform(self, X):
+            X = X.copy()
+            # Объединяем с рассчитанными модами по ключевым столбцам
+            X = X.merge(self.group_modes_, on=self.group_cols, how="left")
+            # Заполняем пропуски в целевой колонке
+            X[self.target_col] = X[self.target_col].fillna(X["mode_value"])
+            # Удаляем временную колонку с модой
+            X.drop(columns=["mode_value"], inplace=True)
+            return X
+
+    # Создание класса-трансформера для замены пропусков в столбце на основе условий из другого столбца
+    import pandas as pd
+    import numpy as np
+    from sklearn.base import BaseEstimator, TransformerMixin
+    from sklearn.pipeline import Pipeline
+
+    # Класс-трансформер для замены пропусков в столбце на основе условий из другого столбца
+    class ConditionalValueImputer(BaseEstimator, TransformerMixin):
+        def __init__(self, condition_col, target_col, fill_mapping):
+            """
+            Инициализация трансформера.
+
+            :param condition_col: Колонка с условиями.
+            :param target_col: Колонка, в которой будут заменяться пропуски.
+            :param fill_mapping: Словарь, где ключ - значение из condition_col, а значение - значение для замены пропусков в target_col.
+            """
+            self.condition_col = condition_col
+            self.target_col = target_col
+            self.fill_mapping = fill_mapping
+
+        def fit(self, X, y=None):
+            return self  # Нет необходимости обучать
+
+        def transform(self, X):
+            X = X.copy()
+            for condition_value, fill_value in self.fill_mapping.items():
+                mask = (X[self.condition_col] == condition_value) & (X[self.target_col].isna())
+                X.loc[mask, self.target_col] = fill_value
+            return X
+
+    # Создание класса-трансформера для преобразования строк, начинающихся с числа, в число
+    import pandas as pd
+    import numpy as np
+
+    # Класс-трансформер для преобразования строк, начинающихся с числа, в число
+    class NumberExtractorTransformer():
+        def __init__(self, columns):
+            """
+            Инициализация трансформера.
+
+            :param columns: Список названий столбцов, для которых нужно извлекать числа.
+            """
+            self.columns = columns
 
         def transform(self, X, y=None):
-            def replace_con(df, filter, column_fix, column_replace, value_replace):
-                '''
-                Функция получает на вход датасет и по укзанному
-                значению фильтра в фильтруемом поле, заменяет пропуски
-                в заменяем поле на значение value_replace
-                '''
-                return df.apply(
-                    lambda row: value_replace if pd.isnull(row[column_replace]) & (row[column_fix] == filter) else row[
-                        column_replace], axis=1)
+            """
+            Извлекает числа из начала строки для указанных столбцов.
 
-            for filter in self.filters:
-                X[self.column_replace] = replace_con(X, filter, self.column_fix, self.column_replace, self.value_replace)
+            :param X: Входной DataFrame.
+            :param y: Не используется, добавлен для совместимости с API sklearn.
+            :return: Преобразованный DataFrame.
+            """
+            X = X.copy()
+            for column in self.columns:
+                X[column] = (
+                    X[column]
+                    .astype(str)  # Преобразование в строку
+                    .str.extract(r'^(\d+)')  # Извлечение первого числа в начале строки
+                    .astype(float)  # Преобразование к числовому типу
+                )
             return X
 
         def fit(self, X, y=None):
-            return self
-
-    # Создаем датасеты для замены значений медианами и модами
-    def df_median_mode(df, columns):
-        '''
-        Функция получает на вход датасет и формирует по нему датасет
-        с медианами и модами расчитанными в группировке
-        по полям в списке columns
-        '''
-        columns_isnumber = df.select_dtypes([int, float]).columns.to_list()
-        df_med_mod = df.copy()
-
-        for column in columns_isnumber:
-            df_med_mod[column] = df.groupby(columns)[column].transform('median')
-
-        columns_isobject = df.select_dtypes([object]).columns.to_list()
-
-        for column in columns:
-            columns_isobject.remove(column)
-
-        for column in columns_isobject:
-            df_med_mod[column] = df.groupby(columns)[column].transform(lambda x: x.mode()[0] if len(x.mode()) > 0 else np.nan)
-
-        df_med_mod = df_med_mod.drop_duplicates(keep='first')
-
-        return df_med_mod
-
-    # медианы и моды в группировке по марке, модели, поколению и типу двигателя
-    columns = ['car_make', 'car_model', 'car_gen', 'eng_type']
-    df_mmge = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по марке, модели и поколению
-    columns = ['car_make', 'car_model', 'car_gen']
-    df_mmg = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по марке, модели и типу двигателя
-    columns = ['car_make', 'car_model', 'eng_type']
-    df_mme = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по марке и модели
-    columns = ['car_make', 'car_model']
-    df_mm = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по типу кузова, классу автомобиля и типу двигателя
-    columns = ['car_type', 'class_auto', 'eng_type']
-    df_tce = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по типу кузова и классу автомобиля
-    columns = ['car_type', 'class_auto']
-    df_tc = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по типу кузова
-    columns = ['car_type']
-    df_t = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по классу автомобиля
-    columns = ['class_auto']
-    df_c = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по типу кузова и типу двигателя
-    columns = ['car_type', 'eng_type']
-    df_te = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # медианы и моды в группировке по классу автомобиля и типу двигателя
-    columns = ['class_auto', 'eng_type']
-    df_ce = [df_median_mode(df_train, columns).sort_values(by=columns), columns]
-
-    # Класс для замещения пропуска в поле медианой или модой
-    class medModTransformer():
-        def __init__(self, df_med_mods, column_replace):
-            self.df_med_mods = df_med_mods
-            self.column_replace = column_replace
-        def transform(self, X, y=None):
-            def return_med_mod(df_med_mod, row, column_replace):
-                '''
-                Функция принимает на вход датасет
-                с медиананами, модами и полями группировки (до 5 полей),
-                значения записи для фильтрации, поле для замены значения
-                и возвращает значение поля для указанных параметров
-                '''
-                df = df_med_mod[0]
-                column_group = df_med_mod[1]
-
-                if len(column_group) == 5:
-                    try:
-                        return df[(df[column_group[0]] == row[column_group[0]]) &
-                                (df[column_group[1]] == row[column_group[1]]) &
-                                (df[column_group[2]] == row[column_group[2]]) &
-                                (df[column_group[3]] == row[column_group[3]]) &
-                                (df[column_group[4]] == row[column_group[4]])][column_replace].values[0]
-                    except:
-                        return np.nan
-                elif len(column_group) == 4:
-                    try:
-                        return df[(df[column_group[0]] == row[column_group[0]]) &
-                                (df[column_group[1]] == row[column_group[1]]) &
-                                (df[column_group[2]] == row[column_group[2]]) &
-                                (df[column_group[3]] == row[column_group[3]])][column_replace].values[0]
-                    except:
-                        return np.nan
-                elif len(column_group) == 3:
-                    try:
-                        return df[(df[column_group[0]] == row[column_group[0]]) &
-                                (df[column_group[1]] == row[column_group[1]]) &
-                                (df[column_group[2]] == row[column_group[2]])][column_replace].values[0]
-                    except:
-                        return np.nan
-                elif len(column_group) == 2:
-                    try:
-                        return df[(df[column_group[0]] == row[column_group[0]]) &
-                                (df[column_group[1]] == row[column_group[1]])][column_replace].values[0]
-                    except:
-                        return np.nan
-                elif len(column_group) == 1:
-                    try:
-                        return df[(df[column_group[0]] == row[column_group[0]])][column_replace].values[0]
-                    except:
-                        return np.nan
-
-            for df_med_mod in self.df_med_mods:
-                X[self.column_replace] = X.apply(lambda row: return_med_mod(df_med_mod, row, self.column_replace) if pd.isnull(row[self.column_replace]) else row[self.column_replace], axis=1)
-            return X
-        def fit(self, X, y=None):
-            return self
-
-    # Класс для преобразования количества владельцев в число
-    class classOwnsTransformer():
-
-        def transform(self, X, y=None):
-            X['count_owner'] = X['count_owner'].apply(lambda x: int(x.split()[0]) if not pd.isnull(x) else np.nan)
-            return X
-
-        def fit(self, X, y=None):
-            return self
+            return self  # Нет необходимости обучать
 
     # Класс для удаления дубликатов
-    class dropDuplicate():
+    class DropDuplicate:
+        def __init__(self, columns_to_exclude=None):
+            """
+            Класс для удаления дубликатов на основе выбранных столбцов.
+
+            :param columns_to_exclude: Список столбцов, которые нужно исключить из проверки на дубликаты.
+            """
+            self.columns_to_exclude = columns_to_exclude or []
 
         def transform(self, X, y=None):
-            column_features = df_train.columns[df_train.any()].to_list()
-            columns_remove = ['car_price', 'car_model', 'car_gen', 'car_compl']
-            for column_remove in columns_remove:
-                column_features.remove(column_remove)
-            X = X.drop_duplicates(subset=column_features, keep='first')
-            X = X.reset_index(drop=True)
+            """
+            Удаляет дубликаты из DataFrame на основе заданных столбцов.
+
+            :param X: Входной DataFrame.
+            :param y: Не используется, добавлен для совместимости с API sklearn.
+            :return: DataFrame без дубликатов.
+            """
+            X = X.copy()
+            # Определение столбцов для проверки на дубликаты
+            column_features = [col for col in X.columns if col not in self.columns_to_exclude]
+            # Удаление дубликатов
+            X = X.drop_duplicates(subset=column_features, keep='first').reset_index(drop=True)
             return X
 
         def fit(self, X, y=None):
-            return self
+            return self  # Нет необходимости обучать
 
     # Класс для обновления индекса
     class resetIndex():
 
         def transform(self, X, y=None):
+            """
+            Класс для обновления индекса.
+
+            :param X: Входной DataFrame.
+            :param y: Не используется, добавлен для совместимости с API sklearn.
+            :return: DataFrame с обновленным индексом.
+            """
             X = X.reset_index(drop=True)
             return X
 
         def fit(self, X, y=None):
-            return self
+            return self  # Нет необходимости обучать
 
-    # Создаем преобразователи данных
-    column_dropper = Pipeline([
-        ("column_dropper", columnDropperTransformer(['Unnamed: 0', 'url_car', 'ann_id', 'ann_date', 'ann_city',
-                                                     'avail', 'original_pts', 'customs', 'link_cpl', 'eng_power_kw',
-                                                     'pow_resrv', 'options', 'condition', 'url_compl', 'gross_weight']))
-    ])
+    # Пока пустой пайплайн для обработки полей
+    pipelines = []
 
-    car_type_transformer = Pipeline([
-        ("car_type_transformer", columnCarTypeTransformer('car_type'))
-    ])
+    # Добавляем пайплайн для удаления полей, преобразования 'car_type' и
+    # 'count_owner', 'seat_count', 'clearence', 'v_bag', 'fuel_cons'
+    drop_columns = ['Unnamed: 0',
+                    'url_car',
+                    'ann_id',
+                    'ann_date',
+                    'ann_city',
+                    'avail',
+                    'original_pts',
+                    'customs',
+                    'link_cpl',
+                    'eng_power_kw',
+                    'pow_resrv',
+                    'options',
+                    'condition',
+                    'url_compl',
+                    'gross_weight']
 
-    class_auto_transformer = Pipeline(steps=[
-        ("transform_class_auto_mmge", medModTransformer([df_mmge, df_mmg, df_mme, df_mm], 'class_auto')),
-        ("transform_class_auto_to_M", filterTransformer(['Фургон'], 'car_type', 'class_auto', 'M')),
-        ("transform_class_auto_tce", medModTransformer([df_tce, df_tc, df_te, df_t, df_ce, df_c], 'class_auto')),
-        ("transform_class_auto_to_F", filterTransformer(['Лимузин'], 'car_type', 'class_auto', 'F'))
-    ])
+    pipelines.append(("column_dropper", columnDropperTransformer(drop_columns)))
+    pipelines.append(("car_type_transformer", columnCarTypeTransformer('car_type')))
+    pipelines.append(("count_owner_transformer", NumberExtractorTransformer(
+        columns=['count_owner', 'seat_count', 'clearence', 'v_bag', 'fuel_cons'])))
 
-    eng_size_transformer= Pipeline([
-        ("eng_size_transformer", filterTransformer(['Электро'], 'eng_type', 'eng_size', 0))
-    ])
+    # Добавляем пайплайн для замены пропусков в классе автомобиля ("class_auto")
+    pipelines.append((f'class_auto_transformer_car_type', ConditionalValueImputer(
+        condition_col='car_type',
+        target_col='class_auto',
+        fill_mapping={
+            'Фургон': 'M',  # Для фургонов заполняем 'M'
+            'Лимузин': 'F',  # Для лимузинов заполняем 'F'
+        }
+    )),
+                     )
 
-    clearence_transformer= Pipeline([
-        ("clearence_transformer", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'clearence'))
-    ])
+    strategy = [['car_make', 'car_model', 'car_gen', 'eng_type'],
+                ['car_make', 'car_model', 'car_gen'],
+                ['car_make', 'car_model', 'eng_type'],
+                ['car_make', 'car_model'],
+                ['car_type', 'eng_type'],
+                ['car_type']
+                ]
 
-    v_bag_transformer = Pipeline(steps=[
-        ("transform_v_bag_class_auto_to_0", filterTransformer(['S'], 'class_auto', 'v_bag', 0)),
-        ("transform_v_bag_car_type_to_0", filterTransformer(['Кабриолет', 'Купе', 'Пикап Двойная кабина', 'Пикап Одинарная кабина',
-                                                             'Пикап Полуторная кабина', 'Родстер', 'Тарга'],
-                                                             'car_type', 'v_bag', 0)),
-        ("transform_v_bag_mmg", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'v_bag'))
-    ])
+    target_columns = ['class_auto']
 
-    v_tank_transformer = Pipeline(steps=[
-        ("transform_v_tank_eng_type_to_0", filterTransformer(['Электро'], 'eng_type', 'v_tank', 0)),
-        ("transform_v_tank_mmg", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'v_tank'))
-    ])
+    for target_column in target_columns:
+        for columns in strategy:
+            pipelines.append(((f'group_mean_imputer_{target_column}_{columns}',
+                               GroupModeImputer(group_cols=columns, target_col=target_column))))
 
-    curb_weight_transformer = Pipeline([
-        ("curb_weight_transformer", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'curb_weight'))
-    ])
+    # Добавляем пайплайн для замены пропусков в числовых полях для электрокаров
+    target_columns = ['eng_size', 'v_tank', 'fuel_cons', 'cyl_count']
 
-    rear_brakes_transformer = Pipeline([
-        ("rear_brakes_transformer", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'rear_brakes'))
-    ])
+    for target_column in target_columns:
+        pipelines.append((f'eng_type_elektro_transformer_{target_column}', ConditionalValueImputer(
+            condition_col='eng_type',
+            target_col=target_column,
+            fill_mapping={
+                'Электро': 0,  # Для электрокаров заполняем 0
+            }
+        )),
+                         )
 
-    max_speed_transformer= Pipeline([
-        ("max_speed_transformer", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'max_speed'))
-    ])
+    # Добавляем пайплайн для замены пропусков в текстовых полях для электрокаров
+    target_columns = ['fuel_brand', 'engine_loc1', 'engine_loc2', 'turbocharg']
 
-    acceleration_transformer= Pipeline([
-        ("acceleration_transformer", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'acceleration'))
-    ])
+    for target_column in target_columns:
+        pipelines.append((f'eng_type_elektro_transformer_{target_column}', ConditionalValueImputer(
+            condition_col='eng_type',
+            target_col=target_column,
+            fill_mapping={
+                'Электро': 'Nan',  # Для электрокаров заполняем 'Nan'
+                }
+            )),
+        )
 
-    fuel_cons_transformer = Pipeline(steps=[
-        ("transform_fuel_cons_eng_type_to_0", filterTransformer(['Электро'], 'eng_type', 'fuel_cons', 0)),
-        ("transform_fuel_cons_mmg", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'fuel_cons'))
-    ])
+    # Добавляем пайплайн для замены пропусков в числовых полях медианой
+    strategy = [['car_make', 'car_model', 'car_gen', 'eng_type'],
+                ['car_make', 'car_model', 'car_gen'],
+                ['car_make', 'car_model', 'eng_type'],
+                ['car_make', 'car_model'],
+                ['car_type', 'class_auto', 'eng_type'],
+                ['car_type', 'class_auto'],
+                ['car_type', 'eng_type'],
+                ['car_type'],
+                ['class_auto', 'eng_type'],
+                ['class_auto']
+                ]
 
-    fuel_brand_transformer = Pipeline(steps=[
-        ("transform_fuel_brand_eng_type_to_0", filterTransformer(['Электро'], 'eng_type', 'fuel_brand', 'Nan')),
-        ("transform_fuel_brand_mmg", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'fuel_brand'))
-    ])
+    target_columns = ['clearence',
+                      'v_bag',
+                      'v_tank',
+                      'curb_weight',
+                      'max_speed',
+                      'acceleration',
+                      'fuel_cons',
+                      'max_torq']
 
-    cyl_count_transformer = Pipeline(steps=[
-        ("transform_cyl_count_eng_type_to_0", filterTransformer(['Электро'], 'eng_type', 'cyl_count', 0)),
-        ("transform_cyl_count_mmg", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'cyl_count'))
-    ])
+    for target_column in target_columns:
+        for columns in strategy:
+            pipelines.append(((f'group_median_imputer_{target_column}_{columns}',
+                               GroupMedianImputer(group_cols=columns, target_col=target_column))))
 
-    engine_loc1_transformer = Pipeline(steps=[
-        ("transform_engine_loc1_eng_type_to_0", filterTransformer(['Электро'], 'eng_type', 'engine_loc1', 'Nan')),
-        ("transform_engine_loc1_mmg", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'engine_loc1'))
-    ])
+    # Добавляем пайплайн для замены пропусков в категориальных полях модой
+    strategy = [['car_make', 'car_model', 'car_gen', 'eng_type'],
+                ['car_make', 'car_model', 'car_gen'],
+                ['car_make', 'car_model', 'eng_type'],
+                ['car_make', 'car_model'],
+                ['car_type', 'class_auto', 'eng_type'],
+                ['car_type', 'class_auto'],
+                ['car_type', 'eng_type'],
+                ['car_type'],
+                ['class_auto', 'eng_type'],
+                ['class_auto']
+                ]
 
-    engine_loc2_transformer = Pipeline(steps=[
-        ("transform_engine_loc2_eng_type_to_0", filterTransformer(['Электро'], 'eng_type', 'engine_loc2', 'Nan')),
-        ("transform_engine_loc2_mmg", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'engine_loc2'))
-    ])
+    target_columns = ['rear_brakes',
+                      'max_speed',
+                      'fuel_brand',
+                      'engine_loc1',
+                      'engine_loc2',
+                      'turbocharg']
 
-    turbocharg_transformer = Pipeline(steps=[
-        ("transform_turbocharg_eng_type_to_0", filterTransformer(['Электро'], 'eng_type', 'turbocharg', 'Nan')),
-        ("transform_turbocharg_mmg", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'turbocharg'))
-    ])
+    for target_column in target_columns:
+        for columns in strategy:
+            pipelines.append(((f'group_moda_imputer_{target_column}_{columns}',
+                               GroupModeImputer(group_cols=columns, target_col=target_column))))
 
-    max_torq_transformer= Pipeline([
-        ("transformer_max_torq", medModTransformer([df_mmge, df_mmg, df_mme, df_mm, df_tce, df_tc, df_te, df_t, df_ce, df_c], 'max_torq'))
-    ])
+    # Добавляем пайплайн для удаления полей, преобразования car_type и count_owner
+    drop_columns = ['car_model', 'car_gen', 'car_compl']
 
-    count_owner_transformer = Pipeline([
-        ("count_owner_transformer", classOwnsTransformer())
-    ])
+    pipelines.append(("column_dropper_transformer", columnDropperTransformer(drop_columns)))
+    pipelines.append(("drop_duplicate", DropDuplicate()))
+    pipelines.append(("reset_index", resetIndex()))
 
-    drop_duplicate = Pipeline([
-        ("drop_duplicate", dropDuplicate())
-    ])
+    # Создаем пайплайн
+    pipeline = Pipeline(steps=pipelines)
 
-    reset_index = Pipeline([
-        ("reset_index", resetIndex())
-    ])
+    # Обучение Pipeline
+    transformed_train = pipeline.fit_transform(df_train)
 
-    # Объединяем преобразователи для трэйна
-    column_null_transformer = Pipeline(steps=[
-        ('class_auto_transformer', class_auto_transformer),
-        ('eng_size_transformer', eng_size_transformer),
-        ('clearence_transformer', clearence_transformer),
-        ('v_bag_transformer', v_bag_transformer),
-        ('v_tank_transformer', v_tank_transformer),
-        ('curb_weight_transformer', curb_weight_transformer),
-        ('rear_brakes_transformer', rear_brakes_transformer),
-        ('max_speed_transformer', max_speed_transformer),
-        ('acceleration_transformer', acceleration_transformer),
-        ('fuel_cons_transformer', fuel_cons_transformer),
-        ('fuel_brand_transformer', fuel_brand_transformer),
-        ('cyl_count_transformer', cyl_count_transformer),
-        ('engine_loc1_transformer', engine_loc1_transformer),
-        ('engine_loc2_transformer', engine_loc2_transformer),
-        ('turbocharg_transformer', turbocharg_transformer),
-        ('max_torq_transformer', max_torq_transformer),
-        ("column_dropper", columnDropperTransformer(['car_model', 'car_gen', 'car_compl'])),
-        ("count_owner_transformer", count_owner_transformer),
-        ("drop_duplicate", drop_duplicate)
-    ])
+    # Преобразование тестовых данных
+    transformed_test = pipeline.transform(df_test)
 
-    # Объединяем преобразователи для теста
-    column_null_transformer_test = Pipeline(steps=[
-        ('class_auto_transformer', class_auto_transformer),
-        ('eng_size_transformer', eng_size_transformer),
-        ('clearence_transformer', clearence_transformer),
-        ('v_bag_transformer', v_bag_transformer),
-        ('v_tank_transformer', v_tank_transformer),
-        ('curb_weight_transformer', curb_weight_transformer),
-        ('rear_brakes_transformer', rear_brakes_transformer),
-        ('max_speed_transformer', max_speed_transformer),
-        ('acceleration_transformer', acceleration_transformer),
-        ('fuel_cons_transformer', fuel_cons_transformer),
-        ('fuel_brand_transformer', fuel_brand_transformer),
-        ('cyl_count_transformer', cyl_count_transformer),
-        ('engine_loc1_transformer', engine_loc1_transformer),
-        ('engine_loc2_transformer', engine_loc2_transformer),
-        ('turbocharg_transformer', turbocharg_transformer),
-        ('max_torq_transformer', max_torq_transformer),
-        ("column_dropper", columnDropperTransformer(['car_model', 'car_gen', 'car_compl'])),
-        ("count_owner_transformer", count_owner_transformer),
-        ("reset_index", reset_index)
-    ])
 
-    # Преобразуем и разделяем признаки и таргет
-    train = column_null_transformer.fit_transform(df_train)
-    test = column_null_transformer_test.fit_transform(df_test)
 
-    return train, test
+    return transformed_train, transformed_test
