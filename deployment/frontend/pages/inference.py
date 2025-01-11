@@ -86,13 +86,23 @@ def show_page():
                         filtered_df = filtered_df[filtered_df[col] == val]
                 return [None] + filtered_df[column].dropna().unique().tolist()
 
+            # Поля для фильтрации по выбранным ранее
+            FILTRED_FIELDS = [
+                "car_make", "car_model", "car_gen", "car_type",
+                "transmission", "drive", "st_wheel", "state_mark",
+                "class_auto", "v_bag", "v_tank", "front_brakes", "rear_brakes"
+            ]
+
             # Обязательные поля
             st.markdown("### Обязательные поля")
             cols = st.columns(4)
             for i, col in enumerate(required_fields):
                 with cols[i % 4]:
                     if col in df.select_dtypes(include="object").columns:  # Категориальные поля
-                        options = filter_options(col)
+                        if col in FILTRED_FIELDS:
+                            options = filter_options(col)
+                        else:
+                            options = [None] + df[col].dropna().unique().tolist()
                         user_input[col] = st.selectbox(f"{col}:", options, key=f"required_{col}")
                     elif col in df.select_dtypes(include=["float", "int"]).columns:  # Числовые поля
                         user_input[col] = st.number_input(f"{col}:", value=None, key=f"required_{col}")
@@ -105,7 +115,10 @@ def show_page():
             for i, col in enumerate(optional_fields):
                 with cols[i % 4]:
                     if col in df.select_dtypes(include="object").columns:  # Категориальные поля
-                        options = filter_options(col)
+                        if col in FILTRED_FIELDS:
+                            options = filter_options(col)
+                        else:
+                            options = [None] + df[col].dropna().unique().tolist()
                         user_input[col] = st.selectbox(f"{col}:", options, key=f"optional_{col}")
                     elif col in df.select_dtypes(include=["float", "int"]).columns:  # Числовые поля
                         user_input[col] = st.number_input(f"{col}:", value=None, key=f"optional_{col}")
@@ -120,8 +133,8 @@ def show_page():
             st.session_state.user_input = user_input
 
         REQUIRED_FIELDS = [
-            "car_make", "car_model", "car_gen", "year", "mileage",
-            "color", "eng_type", "count_owner"
+            "car_make", "car_model", "car_gen", "eng_type",
+            "year", "mileage", "color", "count_owner"
         ]
         OPTIONAL_FIELDS = [
             "car_type", "eng_size", "eng_power", "transmission", "drive",

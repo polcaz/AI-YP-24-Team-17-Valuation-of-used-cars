@@ -13,6 +13,7 @@ from deployment.backend.app.preprocessing_x import preproc_x
 
 # In-memory storage for models and data
 models = {}
+is_log_models = []
 datasets = {}
 datasets_prep = {}
 learning_curves = {}
@@ -69,6 +70,7 @@ def train_model(config):
         # Предсказание
         predictions = model.predict(X_test)
         models[config.id] = model
+        is_log_models.append(config.id)
         learning_curves[config.id] = model.learning_curve(X_train, y_train, X_test, y_test)
     elif config.ml_model_type == "poly":
         model = FullModel(config.hyperparameters)
@@ -156,6 +158,8 @@ def make_prediction(model_id, data):
         processed_data = preproc_pipeline.transform(input_data)
         # Выполняем предсказание
         predictions = model.predict(processed_data)
+        if model_id in is_log_models:
+            predictions = np.exp(predictions)
         return {"predictions": predictions.tolist()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
