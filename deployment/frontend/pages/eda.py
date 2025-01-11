@@ -9,6 +9,7 @@ def show_page():
     st.header("Анализ данных")
     uploaded_file = st.file_uploader("Загрузите датасет", type=["csv"])
     st.session_state.train = None
+    st.session_state.df = None
 
     if uploaded_file is not None:
 
@@ -65,14 +66,14 @@ def show_page():
             'max_torq': float,
             'cyl_count': float  # Могут быть пропуски
         }
-        df = pd.read_csv(uploaded_file, dtype=dtypes_of_data)
-        df = df.rename(columns={'Unnamed: 0': 'Unnamed'})
+        st.session_state.df = pd.read_csv(uploaded_file, dtype=dtypes_of_data)
+        st.session_state.df = st.session_state.df.rename(columns={'Unnamed: 0': 'Unnamed'})
         st.write("Просмотр данных:")
-        st.dataframe(df)
+        st.dataframe(st.session_state.df)
 
         st.write("Общая информация о полях набора данных:")
-        df_types = pd.DataFrame(df.dtypes)
-        df_nulls = df.count()
+        df_types = pd.DataFrame(st.session_state.df.dtypes)
+        df_nulls = st.session_state.df.count()
 
         df_null_count = pd.concat([df_nulls, df_types], axis=1)
         df_null_count = df_null_count.reset_index()
@@ -84,14 +85,14 @@ def show_page():
         st.write(df_null_count)
 
         st.write("Основные характеристики числовых признаков:")
-        st.write(df.describe(include=(float, int)))
+        st.write(st.session_state.df.describe(include=(float, int)))
 
         st.write("Основные характеристики нечисловых признаков:")
-        st.write(df.describe(include=object))
+        st.write(st.session_state.df.describe(include=object))
 
         st.write("Распределение признака/целевой переменной:")
-        column = st.selectbox("Выберите признак/целевую переменную", df.columns)
-        st.bar_chart(df[column].value_counts())
+        column = st.selectbox("Выберите признак/целевую переменную", st.session_state.df.columns)
+        st.bar_chart(st.session_state.df[column].value_counts())
 
         # Отправка файла в API
         st.header("Отправить файл в API")

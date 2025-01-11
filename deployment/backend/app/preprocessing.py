@@ -397,11 +397,10 @@ def preproc(df):
     pipeline = Pipeline(steps=pipelines)
 
     # Обучение Pipeline
-    transformed_train = pipeline.fit_transform(df_train)
+    train = pipeline.fit_transform(df_train)
 
     # Преобразование тестовых данных
-    transformed_test = pipeline.transform(df_test)
+    test = pipeline.transform(df_test)
 
 
-
-    return transformed_train, transformed_test
+    return train, test, pipeline
