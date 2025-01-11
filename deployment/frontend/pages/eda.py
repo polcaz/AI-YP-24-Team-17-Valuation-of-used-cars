@@ -1,17 +1,18 @@
-import pandas as pd
-from phik import phik_matrix
+import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-
+import pandas as pd
+from phik import phik_matrix
 from deployment.frontend.utils.api_client import *
 
 def show_page():
     st.header("Анализ данных")
     uploaded_file = st.file_uploader("Загрузите датасет", type=["csv"])
     st.session_state.train = None
+    st.session_state.df = None
 
     if uploaded_file is not None:
-
+        '''
         dtypes_of_data = {
             'url_car': str,
             'car_make': str,
@@ -65,14 +66,15 @@ def show_page():
             'max_torq': float,
             'cyl_count': float  # Могут быть пропуски
         }
-        df = pd.read_csv(uploaded_file, dtype=dtypes_of_data)
-        df = df.rename(columns={'Unnamed: 0': 'Unnamed'})
+        st.session_state.df = pd.read_csv(uploaded_file, dtype=dtypes_of_data)'''
+        st.session_state.df = pd.read_csv(uploaded_file)
+        st.session_state.df = st.session_state.df.rename(columns={'Unnamed: 0': 'Unnamed'})
         st.write("Просмотр данных:")
-        st.dataframe(df)
+        st.dataframe(st.session_state.df)
 
         st.write("Общая информация о полях набора данных:")
-        df_types = pd.DataFrame(df.dtypes)
-        df_nulls = df.count()
+        df_types = pd.DataFrame(st.session_state.df.dtypes)
+        df_nulls = st.session_state.df.count()
 
         df_null_count = pd.concat([df_nulls, df_types], axis=1)
         df_null_count = df_null_count.reset_index()
@@ -84,84 +86,58 @@ def show_page():
         st.write(df_null_count)
 
         st.write("Основные характеристики числовых признаков:")
-        st.write(df.describe(include=(float, int)))
+        st.write(st.session_state.df.describe(include=(float, int)))
 
         st.write("Основные характеристики нечисловых признаков:")
-        st.write(df.describe(include=object))
+        st.write(st.session_state.df.describe(include=object))
 
         st.write("Распределение признака/целевой переменной:")
-        column = st.selectbox("Выберите признак/целевую переменную", df.columns)
-        st.bar_chart(df[column].value_counts())
+        column = st.selectbox("Выберите признак/целевую переменную", st.session_state.df.columns)
+        st.bar_chart(st.session_state.df[column].value_counts())
 
-        # Отправка файла в API
-        st.header("Отправить файл в API")
-        if st.button("Отправить"):
-            response = upload_file("api/v1/dataset/upload", uploaded_file)
-            if response.status_code == 200:
-                result = response.json()
-                st.success(result['message'])
-            else:
-                st.error('Ошибка отправки файла на сервер.')
+    # Сохранение данных в сессионное состояние
 
-        # Предобработка датасета в API
-        st.header("Обработать датасет в API")
-        if st.button("Обработать"):
-            with st.spinner("Предобработка данных, пожалуйста подождите..."):
-                response = preprocess_data("api/v1/dataset/preprocessing")
-            if response.status_code == 200:
-                result = response.json()
-                st.success(result['message'])
-                st.session_state.train = pd.DataFrame(result['train'])
+    if "selected_features" not in st.session_state:
+        st.session_state.selected_features = None
+
+    if "first_feature" not in st.session_state:
+        st.session_state.first_feature = None
+
+    if "second_feature" not in st.session_state:
+        st.session_state.second_feature = None
+
+    # Отправка и обработка файла в API
+    if st.session_state.df is not None:
+        st.header("Отправка и обработка файла в API")
+
+        if st.button("Отправить и обработать"):
+            if uploaded_file is not None:
+                # Отправка файла
+                with st.spinner("Отправка файла в API..."):
+                    response_upload = upload_file("api/v1/dataset/upload", uploaded_file)
+                    if response_upload.status_code == 200:
+                        result_upload = response_upload.json()
+                        st.success(result_upload['message'])
+                    else:
+                        st.error("Ошибка отправки файла на сервер.")
+                        st.stop()  # Остановить выполнение при ошибке отправки
+
+                # Предобработка файла
+                with st.spinner("Предобработка данных, пожалуйста, подождите..."):
+                    response_preprocess = preprocess_data("api/v1/dataset/preprocessing")
+                    if response_preprocess.status_code == 200:
+                        result_preprocess = response_preprocess.json()
+                        st.success(result_preprocess['message'])
+                        st.session_state.train = pd.DataFrame(result_preprocess['train'])
+                    else:
+                        st.error("Ошибка обработки файла на сервере.")
             else:
-                st.error('Ошибка обработки файла на сервере.')
+                st.error("Пожалуйста, загрузите файл перед отправкой.")
 
     if st.session_state.train is not None:
         st.write("Просмотр обработанных данных:")
-
-        st.dataframe(st.session_state.train)
         train = st.session_state.train
-        train = train.astype(
-            # Много избыточных float. В конце предобработки все признаки не приведены к соответствующим типам.
-            # Пока просто можно удалить комментарии
-            dtype={
-                 'unnamed_0': int,
-                 'car_make': 'category',
-                 'car_type': 'category',
-                 'car_price': float,
-                 'year': int,
-                 'mileage': int,
-                 'color': 'category',
-                 'eng_size': float,
-                 'eng_power': int,
-                 'eng_type': 'category',
-                 'transmission': 'category',
-                 'drive': 'category',
-                 'st_wheel': 'category',
-                 'count_owner': int,
-                 'state_mark': 'category',
-                 'class_auto': 'category',
-                 'door_count': int,
-                 'long': int,
-                 'width': int,
-                 'height': float,  # по идее int, но как int не определяется столбец
-                 'clearence': float,  # по идее int, но как int не определяется столбец
-                 'v_tank': float,  # по идее int, но как int не определяется столбец
-                 'curb_weight': float,  # по идее int, но как int не определяется столбец
-                 'front_brakes': 'category',
-                 'rear_brakes': 'category',
-                 'max_speed': float,  # по идее int, но как int не определяется столбец
-                 'acceleration': float,
-                 'fuel_cons': float,
-                 'fuel_brand': 'category',
-                 'engine_loc1': 'category',
-                 'engine_loc2': 'category',
-                 'turbocharg': 'category',
-                 'max_torq': float,  # по идее int, но как int не определяется столбец
-                 'cyl_count': float,  # по идее int, но как int не определяется столбец
-                 'seat_count': float,  # по идее int, но как int не определяется столбец
-                 'v_bag': float  # по идее int, но как int не определяется столбец
-            }
-        )
+        st.dataframe(train)
         # Уменьшим избыточную разрядность чисел
         fcols = train.select_dtypes('float').columns
         icols = train.select_dtypes('integer').columns
@@ -320,39 +296,57 @@ def show_page():
             selected_features = selection_df[selection_df['Выбран'] == True].index.to_list()
 
             return selected_features
+
         # Выбор признаков
         message, select1, select2 = st.columns(3, vertical_alignment="bottom")
         message.markdown('Выберите два признака для исследования')
-        first_feature = select1.selectbox('Первый признак:', list(train.columns))
-        second_feature = select2.selectbox('Второй признак:', list(train.columns))
 
+        # Селекторы признаков с сохранением выбора в сессионное состояние
+        st.session_state.first_feature = select1.selectbox(
+            'Первый признак:',
+            list(train.columns),
+            index=train.columns.tolist().index(st.session_state.first_feature)
+            if st.session_state.first_feature in train.columns else 0
+        )
+
+        st.session_state.second_feature = select2.selectbox(
+            'Второй признак:',
+            list(train.columns),
+            index=train.columns.tolist().index(st.session_state.second_feature)
+            if st.session_state.second_feature in train.columns else 0
+        )
+
+        first_feature = st.session_state.first_feature
+        second_feature = st.session_state.second_feature
+
+        # Построение графиков
         st.subheader(f'Распределение значений признака {first_feature}')
-        # Первая гистограмма: распределение значений первого признака
         fig_hist_first = create_histogram(first_feature)
         st.plotly_chart(fig_hist_first, use_container_width=True)
 
         if second_feature != first_feature:
             st.subheader(f'Распределение значений признака {second_feature}')
-            # Вторая гистограмма: распределение значений второго признака
             fig_hist_second = create_histogram(second_feature)
             st.plotly_chart(fig_hist_second, use_container_width=True)
 
         st.subheader('Зависимость между двумя признаками')
-
-        # График: зависимость второго признака от первого
         fig_dependency = create_dependency_plot(first_feature, second_feature)
         st.plotly_chart(fig_dependency, use_container_width=True)
 
         st.subheader('Корреляция между признаками')
 
-        # Кнопка расчета корреляции
+        # Кнопка расчета корреляции с сохранением результата
         if st.button('Рассчитать корреляцию'):
-            selected_features = get_select_features()
-            corr_matrix = phik_matrix(train[selected_features],
-                                          interval_cols=num_features)
-            st.write(corr_matrix)
+            st.session_state.selected_features = get_select_features()
+            corr_matrix = phik_matrix(train[st.session_state.selected_features],
+                                      interval_cols=num_features)
+            st.session_state.corr_matrix = corr_matrix
 
-            # График: Тепловая карта корреляций
-            fig_corr_heatmap = px.imshow(corr_matrix, color_continuous_scale='RdBu_r',
-                            zmin=-1, zmax=1, text_auto='.2f')
+        # Отображение сохраненной корреляции
+        if "corr_matrix" in st.session_state:
+            st.write(st.session_state.corr_matrix)
+
+            fig_corr_heatmap = px.imshow(st.session_state.corr_matrix,
+                                         color_continuous_scale='RdBu_r',
+                                         zmin=-1, zmax=1, text_auto='.2f')
             st.plotly_chart(fig_corr_heatmap, use_container_width=True)
