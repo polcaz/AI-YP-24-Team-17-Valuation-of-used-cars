@@ -1,17 +1,18 @@
 import streamlit as st
-import pandas as pd
 import plotly.express as px
-import io
-import plotly.graph_objs as go
+import plotly.graph_objects as go
+import pandas as pd
+from phik import phik_matrix
 from deployment.frontend.utils.api_client import *
 
 def show_page():
     st.header("Анализ данных")
     uploaded_file = st.file_uploader("Загрузите датасет", type=["csv"])
     st.session_state.train = None
+    st.session_state.df = None
 
     if uploaded_file is not None:
-
+        '''
         dtypes_of_data = {
             'url_car': str,
             'car_make': str,
@@ -65,14 +66,15 @@ def show_page():
             'max_torq': float,
             'cyl_count': float  # Могут быть пропуски
         }
-        df = pd.read_csv(uploaded_file, dtype=dtypes_of_data)
-        df = df.rename(columns={'Unnamed: 0': 'Unnamed'})
+        st.session_state.df = pd.read_csv(uploaded_file, dtype=dtypes_of_data)'''
+        st.session_state.df = pd.read_csv(uploaded_file)
+        st.session_state.df = st.session_state.df.rename(columns={'Unnamed: 0': 'Unnamed'})
         st.write("Просмотр данных:")
-        st.dataframe(df)
+        st.dataframe(st.session_state.df)
 
         st.write("Общая информация о полях набора данных:")
-        df_types = pd.DataFrame(df.dtypes)
-        df_nulls = df.count()
+        df_types = pd.DataFrame(st.session_state.df.dtypes)
+        df_nulls = st.session_state.df.count()
 
         df_null_count = pd.concat([df_nulls, df_types], axis=1)
         df_null_count = df_null_count.reset_index()
@@ -84,101 +86,269 @@ def show_page():
         st.write(df_null_count)
 
         st.write("Основные характеристики числовых признаков:")
-        st.write(df.describe(include=(float, int)))
+        st.write(st.session_state.df.describe(include=(float, int)))
 
         st.write("Основные характеристики нечисловых признаков:")
-        st.write(df.describe(include=object))
+        st.write(st.session_state.df.describe(include=object))
 
         st.write("Распределение признака/целевой переменной:")
-        column = st.selectbox("Выберите признак/целевую переменную", df.columns)
-        st.bar_chart(df[column].value_counts())
+        column = st.selectbox("Выберите признак/целевую переменную", st.session_state.df.columns)
+        st.bar_chart(st.session_state.df[column].value_counts())
 
-        # Отправка файла в API
-        st.header("Отправить файл в API")
-        if st.button("Отправить"):
-            response = upload_file("api/v1/dataset/upload", uploaded_file)
-            if response.status_code == 200:
-                result = response.json()
-                st.success(result['message'])
-            else:
-                st.error('Ошибка отправки файла на сервер.')
+    # Сохранение данных в сессионное состояние
 
-        # Предобработка датасета в API
-        st.header("Обработать датасет в API")
-        if st.button("Обработать"):
-            with st.spinner("Предобработка данных, пожалуйста подождите..."):
-                response = preprocess_data("api/v1/dataset/preprocessing")
-            if response.status_code == 200:
-                result = response.json()
-                st.success(result['message'])
-                st.session_state.train = pd.DataFrame(result['train'])
+    if "selected_features" not in st.session_state:
+        st.session_state.selected_features = None
+
+    if "first_feature" not in st.session_state:
+        st.session_state.first_feature = None
+
+    if "second_feature" not in st.session_state:
+        st.session_state.second_feature = None
+
+    # Отправка и обработка файла в API
+    if st.session_state.df is not None:
+        st.header("Отправка и обработка файла в API")
+
+        if st.button("Отправить и обработать"):
+            if uploaded_file is not None:
+                # Отправка файла
+                with st.spinner("Отправка файла в API..."):
+                    response_upload = upload_file("api/v1/dataset/upload", uploaded_file)
+                    if response_upload.status_code == 200:
+                        result_upload = response_upload.json()
+                        st.success(result_upload['message'])
+                    else:
+                        st.error("Ошибка отправки файла на сервер.")
+                        st.stop()  # Остановить выполнение при ошибке отправки
+
+                # Предобработка файла
+                with st.spinner("Предобработка данных, пожалуйста, подождите..."):
+                    response_preprocess = preprocess_data("api/v1/dataset/preprocessing")
+                    if response_preprocess.status_code == 200:
+                        result_preprocess = response_preprocess.json()
+                        st.success(result_preprocess['message'])
+                        st.session_state.train = pd.DataFrame(result_preprocess['train'])
+                    else:
+                        st.error("Ошибка обработки файла на сервере.")
             else:
-                st.error('Ошибка обработки файла на сервере.')
+                st.error("Пожалуйста, загрузите файл перед отправкой.")
 
     if st.session_state.train is not None:
         st.write("Просмотр обработанных данных:")
+        train = st.session_state.train
+        st.dataframe(train)
+        # Уменьшим избыточную разрядность чисел
+        fcols = train.select_dtypes('float').columns
+        icols = train.select_dtypes('integer').columns
+        train[fcols] = train[fcols].apply(pd.to_numeric, downcast='float')
+        train[icols] = train[icols].apply(pd.to_numeric, downcast='integer')
 
-        st.dataframe(st.session_state.train)
-
-        # Составим список числовых признаков
+        # Составим список числовых и категориальных признаков
         num_features = (
-            st.session_state.train.select_dtypes(
-                include=['int', 'float']
+            train.select_dtypes(
+                include=['integer', 'floating']
             ).columns.to_list()
         )
-
-        message, select = st.columns(2, vertical_alignment="bottom")
-        message.markdown('Выберите признак, распределение значений которого хотите изучить')
-
-        feature_to_analize = select.selectbox('Признак', num_features)
-
-        fig = go.Figure()
-        fig.add_trace(go.Histogram(
-
-                x=st.session_state.train[feature_to_analize],
-                histnorm='percent',
-                name=f'{feature_to_analize}',
-                marker_color='#EB89B5'
-            ))
-
-        fig.update_layout(
-            xaxis_title_text=f'Значения {feature_to_analize}',
-            yaxis_title_text='Количество объектов',
-            title_text=f'Распределение значений {feature_to_analize}',
-            hovermode="x"
+        cat_features = (
+            train.select_dtypes(
+                include=['category']
+            ).columns.to_list()
         )
-        st.plotly_chart(fig, use_container_width=True)
+        date_features = 'ann_date'
 
-        # Определим значения признака, для которых будем считать среднее
+        def create_histogram(feature):
+            if feature in date_features:
+                train['year_month'] = train[feature].dt.strftime('%Y-%m')
+                fig = go.Figure([
+                    go.Histogram(
+                        x=train['year_month']
+                    )
+                ])
 
-        st.session_state.train['intervals'], thresholds = \
-            pd.qcut(st.session_state.train[feature_to_analize], q=40, duplicates='drop', retbins=True)
-        data = st.session_state.train.groupby(by=['intervals'],
-                          observed=True)['car_price'].agg(['mean'])
-        labels = (thresholds[1:] + thresholds[:-1]) / 2
+                fig.update_layout(
+                    xaxis_title_text=f'Год и месяц',
+                    yaxis_title_text='Количество объектов',
+                    hovermode="x"
+                )
+            elif feature in num_features:
+                fig = go.Figure([
+                    go.Histogram(
+                        x=train[feature],
+                        histnorm='percent'
+                    )
+                ])
+                fig.update_layout(
+                    xaxis_title_text=f'Значения {feature}',
+                    yaxis_title_text='Количество объектов',
+                    hovermode="x"
+                )
+            else:
+                unique_values = train[feature].value_counts().to_dict()
+                sorted_unique_values = sorted(unique_values.items(),
+                                              key=lambda x: x[1], reverse=True)
+                if len(sorted_unique_values) <= 20:
+                    categories = [x[0] for x in sorted_unique_values]
+                    values = [x[1] for x in sorted_unique_values]
+                else:
+                    categories = [x[0] for x in sorted_unique_values[:20]] + ['other']
+                    values = [x[1] for x in sorted_unique_values[:20]]
+                    values.append(sum([x[1] for x in sorted_unique_values[20:]]))
+                fig = go.Figure([
+                    go.Bar(
+                        x=categories,
+                        y=values
+                    )
+                ])
+                fig.update_layout(
+                    xaxis_title_text=f'Значения {feature}',
+                    yaxis_title_text='Количество объектов',
+                    hovermode="x"
+                )
 
-        fig = go.Figure([
-            go.Scatter(
-                name='объекты',
+            return fig
 
-                x=st.session_state.train[feature_to_analize],
-                y=st.session_state.train['car_price'],
-                mode='markers',
-                line=dict(color='rgb(31, 119, 180)'),
-            ),
-            go.Scatter(
-                name='среднее значение',
-                x=labels,
-                y=data['mean'],
-                mode='markers',
-                line=dict(color='red'),
-            )
-        ])
-        fig.update_layout(
-            yaxis=dict(title=dict(text='Целевой признак (цена)')),
-            title=dict(text=f'Значения {feature_to_analize}'),
-            title_text=f'Связь {feature_to_analize} с целевым признаком (цена)',
-            hovermode="x"
+        def create_dependency_plot(first_feature, second_feature):
+            if first_feature in num_features and second_feature in num_features:
+                fig = go.Figure([
+                    go.Scatter(
+                        x=train[first_feature],
+                        y=train[second_feature],
+                        mode='markers'
+                    )
+                ])
+                fig.update_layout(
+                    yaxis_title_text=f'Второй признак {second_feature}',
+                    xaxis_title_text=f'Первый признак {first_feature}',
+                    hovermode="x"
+                )
+            elif first_feature in cat_features and second_feature in cat_features:
+                crosstab = pd.crosstab(train[first_feature], train[second_feature])
+                fig = px.imshow(crosstab, text_auto=True)
+            elif first_feature in date_features or second_feature in date_features:
+                if first_feature in date_features:
+                    time_col = first_feature
+                    other_col = second_feature
+                else:
+                    time_col = second_feature
+                    other_col = first_feature
+                train['year_month'] = train[time_col].dt.strftime('%Y-%m')
+                if other_col in num_features:
+                    fig = px.box(train, x=train['year_month'], y=train[other_col])
+                    fig.update_layout(
+                        yaxis_title_text=f'Признак {other_col}',
+                        xaxis_title_text=f'Год и месяц'
+                    )
+                else:
+                    crosstab = pd.crosstab(train['year_month'], train[other_col])
+                    fig = px.imshow(crosstab, text_auto=True)
+            else:
+                if first_feature in cat_features:
+                    cat_col = first_feature
+                    num_col = second_feature
+                else:
+                    cat_col = second_feature
+                    num_col = first_feature
+                train['categories'] = train[cat_col]
+                if train['categories'].nunique() > 20:
+                    train['categories'] = train['categories'].astype('object')
+                    counts = train[cat_col].value_counts()
+                    top_categories = counts.index[:20]
+                    train.loc[~train['categories'].isin(top_categories), 'categories'] = 'other'
+                    train['categories'] = train['categories'].astype('category')
+                fig = px.box(train, x=train['categories'], y=train[num_col])
+                fig.update_layout(
+                    yaxis_title_text=f'Признак {num_col}',
+                    xaxis_title_text=f'Признак {cat_col}'
+                )
+
+            return fig
+
+        def get_select_features(threshold=500):
+            if 'categories' in train.columns:
+                features = train.drop(['categories'], axis=1).columns.to_list()
+            else:
+                features = train.columns.to_list()
+
+            columns = {'Признак': [], 'Уникальных значений': [], 'Выбран': []}
+
+            for feature in features:
+                if feature in num_features:
+                    columns['Признак'].append(feature)
+                    columns['Уникальных значений'].append('числовой')
+                    columns['Выбран'].append(True)
+                elif feature in date_features:
+                    columns['Признак'].append(feature)
+                    columns['Уникальных значений'].append('временной')
+                    columns['Выбран'].append(False)
+                else:
+                    unique_count = train[feature].nunique()
+                    columns['Признак'].append(feature)
+                    columns['Уникальных значений'].append(str(unique_count))
+                    columns['Выбран'].append(unique_count < threshold)
+
+
+            selection_df = pd.DataFrame(columns)
+            selection_df.set_index('Признак', inplace=True)
+            if (selection_df['Выбран'] == False).sum() > 0:
+                st.write('Исключены следующие признаки:')
+                st.dataframe(selection_df.loc[selection_df['Выбран'] == False, 'Уникальных значений'])
+
+            selected_features = selection_df[selection_df['Выбран'] == True].index.to_list()
+
+            return selected_features
+
+        # Выбор признаков
+        message, select1, select2 = st.columns(3, vertical_alignment="bottom")
+        message.markdown('Выберите два признака для исследования')
+
+        # Селекторы признаков с сохранением выбора в сессионное состояние
+        st.session_state.first_feature = select1.selectbox(
+            'Первый признак:',
+            list(train.columns),
+            index=train.columns.tolist().index(st.session_state.first_feature)
+            if st.session_state.first_feature in train.columns else 0
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.session_state.second_feature = select2.selectbox(
+            'Второй признак:',
+            list(train.columns),
+            index=train.columns.tolist().index(st.session_state.second_feature)
+            if st.session_state.second_feature in train.columns else 0
+        )
+
+        first_feature = st.session_state.first_feature
+        second_feature = st.session_state.second_feature
+
+        # Построение графиков
+        st.subheader(f'Распределение значений признака {first_feature}')
+        fig_hist_first = create_histogram(first_feature)
+        st.plotly_chart(fig_hist_first, use_container_width=True)
+
+        if second_feature != first_feature:
+            st.subheader(f'Распределение значений признака {second_feature}')
+            fig_hist_second = create_histogram(second_feature)
+            st.plotly_chart(fig_hist_second, use_container_width=True)
+
+        st.subheader('Зависимость между двумя признаками')
+        fig_dependency = create_dependency_plot(first_feature, second_feature)
+        st.plotly_chart(fig_dependency, use_container_width=True)
+
+        st.subheader('Корреляция между признаками')
+
+        # Кнопка расчета корреляции с сохранением результата
+        if st.button('Рассчитать корреляцию'):
+            st.session_state.selected_features = get_select_features()
+            corr_matrix = phik_matrix(train[st.session_state.selected_features],
+                                      interval_cols=num_features)
+            st.session_state.corr_matrix = corr_matrix
+
+        # Отображение сохраненной корреляции
+        if "corr_matrix" in st.session_state:
+            st.write(st.session_state.corr_matrix)
+
+            fig_corr_heatmap = px.imshow(st.session_state.corr_matrix,
+                                         color_continuous_scale='RdBu_r',
+                                         zmin=-1, zmax=1, text_auto='.2f')
+            st.plotly_chart(fig_corr_heatmap, use_container_width=True)
+

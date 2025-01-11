@@ -282,6 +282,30 @@ def preproc(df):
     pipelines.append(("count_owner_transformer", NumberExtractorTransformer(
         columns=['count_owner', 'seat_count', 'clearence', 'v_bag', 'fuel_cons'])))
 
+    # Добавляем пайплайн для замены пропусков в полях
+    # 'car_type', 'state_mark', 'front_brakes', 'transmission', 'drive', 'st_wheel' модой
+    strategy = [['car_make', 'car_model', 'car_gen']]
+
+    target_columns = ['car_type', 'state_mark', 'front_brakes', 'transmission', 'drive', 'st_wheel']
+
+    for target_column in target_columns:
+        for columns in strategy:
+            pipelines.append(((f'group_mode_imputer_{target_column}_{columns}',
+                               GroupModeImputer(group_cols=columns, target_col=target_column))))
+
+    # Добавляем пайплайн для замены пропусков в полях
+    # 'door_count', 'seat_count', 'long', 'widht', 'height', медианой
+    strategy = [['car_make', 'car_model', 'car_gen']]
+
+    target_columns = ['door_count', 'seat_count', 'long', 'widht', 'height', 'cyl_count']
+
+    for target_column in target_columns:
+        for columns in strategy:
+            pipelines.append(((f'group_mean_imputer_{target_column}_{columns}',
+                               GroupMedianImputer(group_cols=columns, target_col=target_column))))
+
+
+
     # Добавляем пайплайн для замены пропусков в классе автомобиля ("class_auto")
     pipelines.append((f'class_auto_transformer_car_type', ConditionalValueImputer(
         condition_col='car_type',
@@ -289,9 +313,9 @@ def preproc(df):
         fill_mapping={
             'Фургон': 'M',  # Для фургонов заполняем 'M'
             'Лимузин': 'F',  # Для лимузинов заполняем 'F'
-        }
-    )),
-                     )
+            }
+        )),
+    )
 
     strategy = [['car_make', 'car_model', 'car_gen', 'eng_type'],
                 ['car_make', 'car_model', 'car_gen'],
@@ -354,7 +378,9 @@ def preproc(df):
                       'max_speed',
                       'acceleration',
                       'fuel_cons',
-                      'max_torq']
+                      'max_torq',
+                      'eng_size',
+                      'eng_power']
 
     for target_column in target_columns:
         for columns in strategy:
@@ -397,11 +423,10 @@ def preproc(df):
     pipeline = Pipeline(steps=pipelines)
 
     # Обучение Pipeline
-    transformed_train = pipeline.fit_transform(df_train)
+    train = pipeline.fit_transform(df_train)
 
     # Преобразование тестовых данных
-    transformed_test = pipeline.transform(df_test)
+    test = pipeline.transform(df_test)
 
 
-
-    return transformed_train, transformed_test
+    return train, test, pipeline

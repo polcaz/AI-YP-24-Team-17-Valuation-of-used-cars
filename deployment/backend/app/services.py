@@ -13,10 +13,12 @@ from deployment.backend.app.preprocessing_x import preproc_x
 
 # In-memory storage for models and data
 models = {}
+is_log_models = []
 datasets = {}
 datasets_prep = {}
 learning_curves = {}
 loaded_model = None
+preproc_pipeline = None
 
 async def upload_csv_dataset(file):
     try:
@@ -44,10 +46,11 @@ def perform_eda():
     }
 
 def preprocessing_data():
+    global preproc_pipeline
     if "current" not in datasets:
         raise HTTPException(status_code=404, detail="No dataset uploaded")
     df = datasets["current"]
-    train, test = preproc(df)
+    train, test, preproc_pipeline = preproc(df)
     datasets_prep["current"] = [train, test]
     return {"message": "Preprocessing of the dataset was successful.", "train": train.to_dict()}
 
@@ -67,6 +70,7 @@ def train_model(config):
         # Предсказание
         predictions = model.predict(X_test)
         models[config.id] = model
+        is_log_models.append(config.id)
         learning_curves[config.id] = model.learning_curve(X_train, y_train, X_test, y_test)
     elif config.ml_model_type == "poly":
         model = FullModel(config.hyperparameters)
@@ -131,16 +135,31 @@ def list_learning_curve(model_id):
     return learning_curves[model_id]
 
 def make_prediction(model_id, data):
+    global preproc_pipeline  # Убедимся, что используем глобальную переменную
+
+    # Проверка на существование модели
     if model_id not in models:
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
     model = models[model_id]
 
+    # Проверка на инициализацию пайплайна
+    if preproc_pipeline is None:
+        raise HTTPException(status_code=500, detail="Preprocessing pipeline is not initialized. Please preprocess the data first.")
+
+    # Попытка преобразовать входные данные в DataFrame
     try:
         input_data = pd.DataFrame([data])
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid input data: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid input data format: {e}")
+
+    # Предобработка и предсказание
     try:
-        predictions = model.predict(preproc_x(input_data))
+        # Применяем пайплайн предобработки
+        processed_data = preproc_pipeline.transform(input_data)
+        # Выполняем предсказание
+        predictions = model.predict(processed_data)
+        if model_id in is_log_models:
+            predictions = np.exp(predictions)
         return {"predictions": predictions.tolist()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
