@@ -278,8 +278,10 @@ class FeatureByAnotherFiller(BaseEstimator, TransformerMixin):
             for col in self.values_to_fill.index.names:
                 result_index.append(row[col])
             result_index = tuple(result_index)
-            result = self.values_to_fill[result_index]
-
+            try:
+                result = self.values_to_fill[result_index]
+            except:
+                result = self.avg_value_to_fill
         # Иначе просто возъмём значение группирующего признака в текущем
         # объекте для получения медианы
         else:
@@ -295,12 +297,11 @@ class FeatureByAnotherFiller(BaseEstimator, TransformerMixin):
 
         # Создадим список числовых переменных для группировки
         self.num_features = data.iloc[:, 1:].select_dtypes(
-            include=['int', 'float']).columns.to_list()
+            exclude=['object', 'category']).columns.to_list()
 
         # Составим список категориальных признаков для группировки
         self.cat_features = data.iloc[:, 1:].select_dtypes(
             include=['object', 'category']).columns.to_list()
-
         self.intervals = {}
 
         # Вычислим категории-интервалы для каждого числового признака
@@ -309,7 +310,7 @@ class FeatureByAnotherFiller(BaseEstimator, TransformerMixin):
             self.intervals[col] = data[col].unique()
         # Получим значение медианы (или моды) в зависимости от типа данных
         # целевого столбца
-        if data[self.target].dtype in ['float', 'int']:
+        if data[self.target].dtype in ['integer', 'floating']:
             self.values_to_fill = data.groupby(
                 self.cat_features + self.num_features,
                 observed=True)[self.target].agg('median')
@@ -548,6 +549,25 @@ class StripTransformer(BaseEstimator, TransformerMixin):
         return self.features
 
 
+# Трансформер для заполнения пропусков нулями
+class FillZeroTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        pass
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X_out = X.copy()
+        X_out = X_out.fillna(0).astype(float)
+
+        self.features = X_out.columns
+
+        return X_out
+
+    def get_feature_names_out(self, X=None):
+        return self.features
+
 # Определим трансформер, который приводит к целочисленному типу
 # передаваемые столбцы
 class TypesTransformer(BaseEstimator, TransformerMixin):
@@ -560,8 +580,8 @@ class TypesTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         X_out = X.copy()
-        # Приведём типы в соответствие с содержимым
-        X_out['pow_resrv'] = X_out['pow_resrv'].astype(float)
+        # # Приведём типы в соответствие с содержимым
+        # X_out['pow_resrv'] = X_out['pow_resrv'].astype(float)
         X_out = X_out.astype({
             'car_make': 'category',
             'car_model': 'category',
