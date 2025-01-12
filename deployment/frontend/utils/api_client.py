@@ -84,3 +84,13 @@ def upload_dataset(data):
     files = {"file": (data.name, data, "text/csv")}
     response = requests.post(url, files=files)
     return response.json()
+
+# Функция для вызова API удаления модели
+def delete_model(model_id):
+    url = f"{API_BASE_URL}/api/v1/models/remove"
+    try:
+        response = requests.delete(f"{url}?model_id={model_id}")
+        return response
+    except Exception as e:
+        st.error(f"Ошибка вызова API для удаления модели: {e}")
+        return None

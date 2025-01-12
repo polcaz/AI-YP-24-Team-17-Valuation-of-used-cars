@@ -66,15 +66,38 @@ def show_page():
             else 0
         )
 
-    # Кривая обучения
-    if st.button("Показать кривую обучения"):
-        response = learning_curve("api/v1/models/learning_curve", st.session_state.model_id)
-        if response.status_code == 200:
-            learning_curve_data = response.json()
-            st.write(f"Кривая обучения для модели '{st.session_state.model_id}':")
-            st.line_chart({
-                "r2_score на трейне": learning_curve_data["train_errors"],
-                "r2_score на тесте": learning_curve_data["test_errors"]
-            })
-        else:
-            st.error(f"Ошибка: {response.json()['detail']}")
+    # Размещение кнопок в одной строке
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Кривая обучения
+        if st.button("Показать кривую обучения"):
+            response = learning_curve("api/v1/models/learning_curve", st.session_state.model_id)
+            if response.status_code == 200:
+                learning_curve_data = response.json()
+                st.write(f"Кривая обучения для модели '{st.session_state.model_id}':")
+                st.line_chart({
+                    "r2_score на трейне": learning_curve_data["train_errors"],
+                    "r2_score на тесте": learning_curve_data["test_errors"]
+                })
+            else:
+                st.error(f"Ошибка: {response.json()['detail']}")
+
+    with col2:
+        # Удаление модели
+        if st.button("Удалить модель"):
+            try:
+                response = delete_model(st.session_state.model_id)
+                if response.status_code == 200:
+                    st.success(f"Модель '{st.session_state.model_id}' успешно удалена.")
+                    # Обновление списка моделей
+                    response_list = list_models("api/v1/models/list_models")
+                    if response_list and response_list.status_code == 200:
+                        st.session_state.list_model = response_list.json().get("models", [])
+                    else:
+                        st.warning("Не удалось обновить список моделей после удаления.")
+                else:
+                    st.error(f"Ошибка удаления модели: {response.json()['detail']}")
+            except Exception as e:
+                st.error(f"Ошибка вызова API для удаления модели: {e}")
+
