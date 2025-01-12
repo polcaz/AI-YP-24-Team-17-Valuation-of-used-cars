@@ -287,6 +287,7 @@ def show_page():
                     columns['Уникальных значений'].append(str(unique_count))
                     columns['Выбран'].append(unique_count < threshold)
 
+
             selection_df = pd.DataFrame(columns)
             selection_df.set_index('Признак', inplace=True)
             if (selection_df['Выбран'] == False).sum() > 0:
@@ -350,3 +351,4 @@ def show_page():
                                          color_continuous_scale='RdBu_r',
                                          zmin=-1, zmax=1, text_auto='.2f')
             st.plotly_chart(fig_corr_heatmap, use_container_width=True)
+
