@@ -193,6 +193,8 @@ def remove_model(model_id: str):
         raise HTTPException(status_code=404, detail="Model not found.")
 
     del models[model_id]
+    del learning_curves[model_id]
+    is_log_models.remove(model_id)
     return {"message": f"Model '{model_id}' removed"}
 
 def remove_all_models():

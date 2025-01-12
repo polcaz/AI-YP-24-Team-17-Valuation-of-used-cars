@@ -70,7 +70,7 @@ def learning_curves_endpoint(request: LearningCurveRequest):
 def make_prediction_endpoint(request: PredictionRequest):
     return make_prediction(request.id, request.data)
 
-@router.delete("/models/remove/{model_id}", response_model=RemoveResponse)
+@router.delete("/models/remove", response_model=RemoveResponse)
 def remove_model_endpoint(model_id: str):
     return remove_model(model_id)
 
