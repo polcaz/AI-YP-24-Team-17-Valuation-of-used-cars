@@ -131,6 +131,7 @@ env.bak/
 venv.bak/
 
 data/*.csv
+notebooks/catboost_info
 
 # Spyder project settings
 .spyderproject
